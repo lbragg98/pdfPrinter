@@ -1,0 +1,13 @@
+
+> pdf-printer@0.1.0 dev
+> next dev --port 3000
+
+   ▲ Next.js 15.5.19
+   - Local:        http://localhost:3000
+   - Network:      http://172.23.192.1:3000
+
+ ✓ Starting...
+ ✓ Ready in 1194ms
+ ○ Compiling / ...
+ ✓ Compiled / in 1873ms (538 modules)
+ GET / 200 in 2112ms
