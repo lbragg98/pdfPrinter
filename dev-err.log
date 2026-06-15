@@ -1,0 +1,77 @@
+ ⨯ ./app/page.tsx:4:1
+Module not found: Can't resolve '@/lib/orchestrator'
+  2 |
+  3 | import { useMemo, useState } from "react";
+> 4 | import {
+    | ^
+  5 |   buildDownloadPrompt,
+  6 |   buildStudySheetPrompt,
+  7 |   createThreadId,
+
+https://nextjs.org/docs/messages/module-not-found
+ ⨯ ./app/page.tsx:4:1
+Module not found: Can't resolve '@/lib/orchestrator'
+  2 |
+  3 | import { useMemo, useState } from "react";
+> 4 | import {
+    | ^
+  5 |   buildDownloadPrompt,
+  6 |   buildStudySheetPrompt,
+  7 |   createThreadId,
+
+https://nextjs.org/docs/messages/module-not-found
+ ⨯ ./app/page.tsx:4:1
+Module not found: Can't resolve '@/lib/orchestrator'
+  2 |
+  3 | import { useMemo, useState } from "react";
+> 4 | import {
+    | ^
+  5 |   buildDownloadPrompt,
+  6 |   buildStudySheetPrompt,
+  7 |   createThreadId,
+
+https://nextjs.org/docs/messages/module-not-found
+ ⨯ ./app/page.tsx:4:1
+Module not found: Can't resolve '@/lib/orchestrator'
+  2 |
+  3 | import { useMemo, useState } from "react";
+> 4 | import {
+    | ^
+  5 |   buildDownloadPrompt,
+  6 |   buildStudySheetPrompt,
+  7 |   createThreadId,
+
+https://nextjs.org/docs/messages/module-not-found
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ⨯ [Error: ENOENT: no such file or directory, open 'C:\Users\lbrag\APPRENTICESHIP\PDF PRINTER\.next\routes-manifest.json'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\lbrag\\APPRENTICESHIP\\PDF PRINTER\\.next\\routes-manifest.json',
+  page: '/'
+}
+ ⨯ [Error: ENOENT: no such file or directory, open 'C:\Users\lbrag\APPRENTICESHIP\PDF PRINTER\.next\routes-manifest.json'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\lbrag\\APPRENTICESHIP\\PDF PRINTER\\.next\\routes-manifest.json'
+}
+[Error: ENOENT: no such file or directory, open 'C:\Users\lbrag\APPRENTICESHIP\PDF PRINTER\.next\routes-manifest.json'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\lbrag\\APPRENTICESHIP\\PDF PRINTER\\.next\\routes-manifest.json',
+  page: '/'
+}
+ ⨯ [Error: ENOENT: no such file or directory, open 'C:\Users\lbrag\APPRENTICESHIP\PDF PRINTER\.next\routes-manifest.json'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\lbrag\\APPRENTICESHIP\\PDF PRINTER\\.next\\routes-manifest.json'
+}
+[Error: ENOENT: no such file or directory, open 'C:\Users\lbrag\APPRENTICESHIP\PDF PRINTER\.next\routes-manifest.json'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\lbrag\\APPRENTICESHIP\\PDF PRINTER\\.next\\routes-manifest.json'
+}
