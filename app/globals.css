@@ -143,29 +143,12 @@ a {
   color: white;
 }
 
-.paper-plane {
-  position: relative;
-  display: inline-block;
+.send-icon {
   width: 24px;
   height: 24px;
-  transform: rotate(16deg);
-}
-
-.paper-plane::before,
-.paper-plane::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border: 2px solid white;
-  border-left: 0;
-  border-top: 0;
-  clip-path: polygon(0 50%, 100% 0, 72% 100%, 50% 62%);
-}
-
-.paper-plane::after {
-  inset: 2px 2px 2px 6px;
-  transform: rotate(180deg);
-  opacity: 0.95;
+  display: block;
+  margin: 0 auto;
+  transform: translateX(1px);
 }
 
 .output-shell {

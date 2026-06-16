@@ -3,7 +3,7 @@
 
 type AppRoutes = "/"
 type AppRouteHandlerRoutes = "/api/orchestrator/run"
-type PageRoutes = never
+type PageRoutes = "/_app" | "/_document"
 type LayoutRoutes = "/"
 type RedirectRoutes = never
 type RewriteRoutes = never
@@ -12,6 +12,8 @@ type Routes = AppRoutes | PageRoutes | LayoutRoutes | RedirectRoutes | RewriteRo
 
 interface ParamMap {
   "/": {}
+  "/_app": {}
+  "/_document": {}
   "/api/orchestrator/run": {}
 }
 
