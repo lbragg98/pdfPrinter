@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
+import type { OrchestratorResponse } from "../lib/orchestrator";
 import {
-  buildDownloadPrompt,
   buildStudySheetPrompt,
   createThreadId,
   runOrchestratorPrompt
@@ -17,11 +17,23 @@ const PythonMark = () => (
   />
 );
 
+const SendIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true" className="send-icon">
+    <path
+      d="M4 12.2 19.5 4.8 15.9 20l-4.6-6.2-7.3-1.6Zm10.5 1.7 2.1-8.8-8.9 4.2 4.1.9 2.7 3.7Z"
+      fill="currentColor"
+    />
+  </svg>
+);
+
 export default function Page() {
   const [topic, setTopic] = useState("");
   const [output, setOutput] = useState(
     "Enter a topic to generate the first study sheet draft."
   );
+  const [flowState, setFlowState] = useState<
+    "idle" | "generating" | "waiting" | "creatingPdf" | "complete"
+  >("idle");
   const [downloadUrl, setDownloadUrl] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [needsConfirmation, setNeedsConfirmation] = useState(false);
@@ -31,8 +43,7 @@ export default function Page() {
   );
 
   const [threadId] = useState(() => createThreadId("study-sheet"));
-
-  const topicLabel = useMemo(() => topic.trim() || "Python basics", [topic]);
+  const [traceId] = useState(() => createThreadId("trace"));
 
   const handleCreate = async () => {
     const trimmed = topic.trim();
@@ -42,23 +53,54 @@ export default function Page() {
       return;
     }
 
+    console.log("[page] create start", {
+      traceId,
+      threadId,
+      topic: trimmed
+    });
+
     setIsLoading(true);
+    setFlowState("generating");
     setShowDownloadLink(false);
     setDownloadUrl("");
     setNeedsConfirmation(false);
     setOutput("Creating the study sheet...");
 
     try {
-      const responseText = await runOrchestratorPrompt({
+      const response: OrchestratorResponse = await runOrchestratorPrompt({
         threadId,
-        input: buildStudySheetPrompt(trimmed)
+        input: buildStudySheetPrompt(trimmed),
+        traceId
       });
+      console.log("[page] create response", {
+        traceId,
+        waitingForInput: response.waitingForInput,
+        downloadUrl: response.downloadUrl || "(missing)",
+        messagePreview: response.message.slice(0, 200),
+        studySheetPreview: response.studySheet.slice(0, 200)
+      });
+      if (response.waitingForInput) {
+        console.log("[page] interrupt shown", {
+          traceId,
+          threadId,
+          promptPreview: response.message.slice(0, 200)
+        });
+      }
+      setOutput(response.studySheet || response.text || "The agent returned no study sheet text.");
+      setConfirmMessage(
+        response.message ||
+          "A study sheet has been created. Do you want to make a printable PDF?"
+      );
+      setNeedsConfirmation(response.waitingForInput);
+      setFlowState(response.waitingForInput ? "waiting" : "idle");
 
-      setOutput(responseText || "The agent returned no study sheet text.");
-      setNeedsConfirmation(true);
-      setConfirmMessage("A study sheet has been created. Do you want to make a printable PDF?");
+      if (!response.waitingForInput && response.downloadUrl) {
+        setDownloadUrl(response.downloadUrl);
+        setShowDownloadLink(true);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
+      setFlowState("idle");
       setOutput(`Study sheet generation failed: ${message}`);
     } finally {
       setIsLoading(false);
@@ -66,28 +108,50 @@ export default function Page() {
   };
 
   const handleConfirmYes = async () => {
+    console.log("[page] confirm yes", {
+      traceId,
+      threadId
+    });
+
     setIsLoading(true);
+    setFlowState("creatingPdf");
+    setNeedsConfirmation(false);
     setConfirmMessage("Creating the printable PDF...");
+    setOutput("Creating the printable PDF...");
 
     try {
-      const responseText = await runOrchestratorPrompt({
+      console.log("[page] confirmation accepted", { threadId, input: "yes" });
+      const response: OrchestratorResponse = await runOrchestratorPrompt({
         threadId,
-        input: buildDownloadPrompt(topicLabel, output)
+        input: "yes",
+        traceId
+      });
+      const nextDownloadUrl = response.downloadUrl || "";
+
+      console.log("[page] post-confirmation response", {
+        traceId,
+        waitingForInput: response.waitingForInput,
+        downloadUrl: response.downloadUrl || "(missing)",
+        messagePreview: response.message.slice(0, 200),
+        studySheetPreview: response.studySheet.slice(0, 200)
       });
 
-      const trimmed = responseText.trim();
-      const linkMatch = trimmed.match(/https?:\/\/\S+/i);
-      const nextDownloadUrl = linkMatch?.[0] ?? "";
-
       setDownloadUrl(nextDownloadUrl);
-      setShowDownloadLink(true);
-      setNeedsConfirmation(false);
+      setShowDownloadLink(Boolean(nextDownloadUrl));
+      setFlowState(nextDownloadUrl ? "complete" : "creatingPdf");
       setOutput(
-        trimmed ||
+        response.downloadUrl
+          ? response.message ||
+          response.text ||
           "The printable PDF is ready. The agent would provide the download link here."
+          : response.message ||
+            response.text ||
+            "The PDF export is still processing. The workflow has not produced a download link yet."
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
+      console.log("[page] confirm yes error", { traceId, message });
+      setFlowState("idle");
       setOutput(`PDF generation failed: ${message}`);
     } finally {
       setIsLoading(false);
@@ -95,11 +159,17 @@ export default function Page() {
   };
 
   const handleConfirmNo = () => {
+    console.log("[page] confirm no", {
+      traceId,
+      threadId
+    });
+
+    setFlowState("idle");
     setNeedsConfirmation(false);
     setShowDownloadLink(false);
     setDownloadUrl("");
     setConfirmMessage("A study sheet has been created. Do you want to make a printable PDF?");
-    setOutput("The flow stopped after the confirmation interrupt.");
+    setOutput("PDF export canceled.");
   };
 
   return (
@@ -123,8 +193,14 @@ export default function Page() {
               placeholder="Enter a topic like Python lists, loops, or functions..."
               aria-label="Topic"
             />
-            <button className="prompt-submit" type="button" onClick={handleCreate} disabled={isLoading}>
-              <span className="paper-plane" />
+            <button
+              className="prompt-submit"
+              type="button"
+              onClick={handleCreate}
+              disabled={isLoading}
+              aria-label="Send topic"
+            >
+              <SendIcon />
             </button>
           </div>
 
@@ -132,7 +208,15 @@ export default function Page() {
             <div className="output-header">
               <span className="output-label">Output</span>
               <span className="output-status">
-                {isLoading ? "Working..." : needsConfirmation ? "Awaiting confirmation" : "Ready"}
+                {flowState === "generating"
+                  ? "Generating study sheet..."
+                  : flowState === "waiting"
+                    ? "Waiting for confirmation..."
+                    : flowState === "creatingPdf"
+                      ? "Creating PDF..."
+                      : flowState === "complete"
+                        ? "Complete"
+                      : "Ready"}
               </span>
             </div>
             <div className="output-card">
@@ -157,16 +241,31 @@ export default function Page() {
 
       {needsConfirmation ? (
         <div className="confirm-overlay" role="presentation">
-          <section className="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+          <section
+            className="confirm-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-title"
+          >
             <p className="confirm-eyebrow">Interrupt</p>
             <h2 id="confirm-title">Confirm PDF creation</h2>
             <div className="confirm-box">
               <p className="confirm-message">{confirmMessage}</p>
               <div className="confirm-actions">
-                <button className="confirm-yes" type="button" onClick={handleConfirmYes} disabled={isLoading}>
+                <button
+                  className="confirm-yes"
+                  type="button"
+                  onClick={handleConfirmYes}
+                  disabled={isLoading}
+                >
                   Yes
                 </button>
-                <button className="confirm-no" type="button" onClick={handleConfirmNo} disabled={isLoading}>
+                <button
+                  className="confirm-no"
+                  type="button"
+                  onClick={handleConfirmNo}
+                  disabled={isLoading}
+                >
                   No
                 </button>
               </div>

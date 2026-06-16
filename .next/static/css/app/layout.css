@@ -1,0 +1,369 @@
+/*!*************************************************************************************************************************************************************************************************************************************************************!*\
+  !*** css ./node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[14].oneOf[10].use[2]!./node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[14].oneOf[10].use[3]!./app/globals.css ***!
+  \*************************************************************************************************************************************************************************************************************************************************************/
+:root {
+  color-scheme: light;
+  --line: rgba(32, 47, 74, 0.12);
+  --line-strong: rgba(32, 47, 74, 0.18);
+  --text: #17253b;
+  --muted: rgba(23, 37, 59, 0.56);
+  --accent: #2c7bd9;
+  --accent-deep: #1f67c7;
+  --panel: rgba(255, 255, 255, 0.9);
+  --panel-soft: rgba(255, 255, 255, 0.74);
+  --shadow: 0 18px 60px rgba(36, 51, 80, 0.12);
+}
+
+html {
+  min-height: 100%;
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.94), transparent 42%),
+    linear-gradient(180deg, #f7f9fc 0%, #eef3f9 100%);
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  color: var(--text);
+  font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  background:
+    radial-gradient(circle at 50% 24%, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.42) 36%, transparent 72%),
+    linear-gradient(180deg, #fbfcfe 0%, #edf2f8 100%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button,
+input,
+a {
+  font: inherit;
+}
+
+.landing-shell {
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.hero-page {
+  min-height: calc(100vh - 48px);
+  display: grid;
+  place-items: center;
+}
+
+.hero-stack {
+  width: min(100%, 940px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.python-mark {
+  display: block;
+  width: 124px;
+  height: auto;
+}
+
+.python-logo-image {
+  object-fit: contain;
+  filter: drop-shadow(0 12px 18px rgba(38, 63, 102, 0.14));
+}
+
+.hero-kicker {
+  margin: 18px 0 0;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.hero-stack h1 {
+  margin: 18px 0 0;
+  max-width: 16ch;
+  font-size: clamp(2.4rem, 4.2vw, 4.6rem);
+  line-height: 1.03;
+  letter-spacing: -0.05em;
+}
+
+.prompt-shell {
+  display: grid;
+  grid-template-columns: 58px 1fr 76px;
+  align-items: center;
+  width: min(100%, 780px);
+  min-height: 92px;
+  margin-top: 38px;
+  padding: 0 12px 0 24px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow:
+    0 12px 28px rgba(37, 53, 83, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  -webkit-backdrop-filter: blur(10px);
+          backdrop-filter: blur(10px);
+}
+
+.prompt-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  color: rgba(92, 110, 138, 0.74);
+  font-size: 28px;
+}
+
+.prompt-input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-size: clamp(1.05rem, 1.4vw, 1.32rem);
+}
+
+.prompt-input::placeholder {
+  color: rgba(90, 106, 133, 0.72);
+}
+
+.prompt-placeholder {
+  color: rgba(90, 106, 133, 0.72);
+  font-size: clamp(1.05rem, 1.4vw, 1.32rem);
+  text-align: left;
+}
+
+.prompt-submit {
+  width: 60px;
+  height: 60px;
+  margin-left: auto;
+  border: 0;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #3d8ae8 0%, #1f67c7 100%);
+  box-shadow: 0 10px 20px rgba(34, 102, 192, 0.28);
+  color: white;
+}
+
+.send-icon {
+  width: 24px;
+  height: 24px;
+  display: block;
+  margin: 0 auto;
+  transform: translateX(1px);
+}
+
+.output-shell {
+  width: min(100%, 780px);
+  margin-top: 30px;
+  text-align: left;
+}
+
+.output-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding: 0 8px;
+}
+
+.output-label {
+  color: var(--accent);
+  font-size: 0.82rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.output-status {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.output-card {
+  min-height: 220px;
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.92), rgba(249, 251, 254, 0.98) 38%, rgba(241, 245, 250, 0.98) 100%);
+  box-shadow: var(--shadow);
+}
+
+.output-title {
+  margin: 0;
+  font-size: 1.45rem;
+  line-height: 1.35;
+  letter-spacing: -0.03em;
+}
+
+.output-copy {
+  margin: 14px 0 0;
+  max-width: 54ch;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.download-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(32, 47, 74, 0.08);
+}
+
+.download-label {
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.download-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  padding: 0 18px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(44, 123, 217, 0.12) 0%, rgba(44, 123, 217, 0.08) 100%);
+  color: var(--accent-deep);
+  text-decoration: none;
+  border: 1px solid rgba(44, 123, 217, 0.16);
+  font-weight: 700;
+}
+
+.download-link-disabled {
+  color: rgba(23, 37, 59, 0.52);
+  background: rgba(232, 237, 244, 0.7);
+}
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(11, 18, 31, 0.26);
+  -webkit-backdrop-filter: blur(8px);
+          backdrop-filter: blur(8px);
+}
+
+.confirm-modal {
+  width: min(560px, 100%);
+  padding: 30px;
+  border-radius: 30px;
+  background: var(--panel);
+  border: 1px solid rgba(32, 47, 74, 0.14);
+  box-shadow: 0 30px 90px rgba(21, 31, 50, 0.24);
+}
+
+.confirm-modal h2 {
+  margin: 0 0 18px;
+  font-size: clamp(1.8rem, 3vw, 2.4rem);
+  letter-spacing: -0.04em;
+}
+
+.confirm-eyebrow {
+  margin: 0 0 10px;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.confirm-box {
+  display: grid;
+  grid-gap: 18px;
+  gap: 18px;
+  padding: 20px;
+  border-radius: 20px;
+  border: 1px solid rgba(32, 47, 74, 0.1);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.confirm-message {
+  margin: 0;
+  color: var(--text);
+  font-size: 1.02rem;
+  line-height: 1.55;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 860px) {
+  .hero-stack {
+    width: 100%;
+  }
+
+  .hero-stack h1 {
+    max-width: 14ch;
+  }
+
+  .output-card {
+    min-height: 200px;
+  }
+
+  .confirm-modal {
+    padding: 24px;
+  }
+}
+
+@media (max-width: 640px) {
+  .landing-shell {
+    padding: 16px;
+  }
+
+  .hero-page {
+    min-height: calc(100vh - 32px);
+  }
+
+  .hero-stack h1 {
+    max-width: 12ch;
+    font-size: clamp(2rem, 8vw, 3.2rem);
+  }
+
+  .prompt-shell {
+    grid-template-columns: 40px 1fr 58px;
+    min-height: 78px;
+    margin-top: 28px;
+    padding-left: 16px;
+  }
+
+  .prompt-submit {
+    width: 48px;
+    height: 48px;
+  }
+
+  .output-shell {
+    margin-top: 24px;
+  }
+
+  .output-card {
+    min-height: 180px;
+    padding: 22px;
+    border-radius: 22px;
+  }
+
+  .confirm-overlay {
+    padding: 16px;
+  }
+
+  .confirm-modal {
+    padding: 20px;
+    border-radius: 24px;
+  }
+
+  .confirm-box {
+    padding: 16px;
+  }
+}
+
