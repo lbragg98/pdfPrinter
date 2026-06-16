@@ -5,34 +5,29 @@
    ▲ Next.js 15.5.19
    - Local:        http://localhost:3000
    - Network:      http://172.23.192.1:3000
+   - Environments: .env.local
 
  ✓ Starting...
- ✓ Ready in 1194ms
+ ✓ Ready in 1208ms
  ○ Compiling / ...
- ✓ Compiled / in 1873ms (538 modules)
- GET / 200 in 2112ms
- GET / 200 in 133ms
- ✓ Compiled in 14ms
- ✓ Compiled /_not-found in 317ms (524 modules)
- GET / 404 in 351ms
- GET / 404 in 12ms
- GET / 404 in 69ms
- ✓ Compiled in 75ms (524 modules)
- ○ Compiling / ...
- GET / 500 in 2440ms
- GET / 500 in 14ms
- GET / 500 in 11ms
- GET / 500 in 19ms
- GET / 500 in 16ms
-   Reload env: .env.local
- GET / 500 in 16ms
- ✓ Compiled /_error in 217ms (886 modules)
- GET / 500 in 1120ms
- GET / 500 in 264ms
- ✓ Compiled in 271ms (895 modules)
-   Reload env: .env.local
- ✓ Compiled in 154ms (785 modules)
- GET / 200 in 210ms
- ○ Compiling /api/orchestrator/run ...
- ✓ Compiled /api/orchestrator/run in 661ms (794 modules)
- POST /api/orchestrator/run 404 in 2453ms
+ ✓ Compiled / in 2.2s (548 modules)
+ GET / 200 in 2489ms
+ GET / 200 in 1122ms
+ GET / 200 in 159ms
+ ✓ Compiled in 129ms (534 modules)
+ ✓ Compiled in 10ms
+ ✓ Compiled in 47ms (212 modules)
+ ✓ Compiled in 50ms (212 modules)
+ ✓ Compiled in 43ms (212 modules)
+ ✓ Compiled in 63ms (212 modules)
+ ✓ Compiled in 72ms (212 modules)
+ ✓ Compiled / in 177ms (534 modules)
+ GET / 200 in 344ms
+ GET / 200 in 24ms
+ GET / 200 in 29ms
+ GET / 200 in 27ms
+ GET / 200 in 32ms
+ GET / 200 in 28ms
+ GET / 200 in 25ms
+ GET / 200 in 35ms
+[?25h
