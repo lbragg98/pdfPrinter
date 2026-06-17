@@ -2,6 +2,18 @@ import { expect, test } from "@playwright/test";
 
 test("topic submit opens interrupt and yes returns the pdf link", async ({ page }) => {
   const pdfUrl = "https://example.com/for-loops-study-sheet.pdf";
+  const interrupt = {
+    skillId: "skill-export-pdf",
+    skillName: "Export PDF",
+    skillThreadId: "study-sheet-thread_skill_skill-export-pdf_interrupt",
+    node: "interrupt_confirm_pdf",
+    nodeLabel: "Confirm PDF",
+    feedbackRequest:
+      "Would you like me to turn this study sheet into a downloadable PDF?",
+    state: {
+      study_sheet: "Study sheet draft for For Loops"
+    }
+  };
   let requestCount = 0;
 
   await page.route("**/api/orchestrator/run", async (route) => {
@@ -9,6 +21,7 @@ test("topic submit opens interrupt and yes returns the pdf link", async ({ page 
     const request = route.request();
     const body = JSON.parse(request.postData() ?? "{}") as {
       input?: string;
+      resume_skill_interrupt?: unknown;
     };
 
     if (requestCount === 1) {
@@ -18,7 +31,7 @@ test("topic submit opens interrupt and yes returns the pdf link", async ({ page 
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          interrupt: true,
+          interrupt,
           study_sheet: "Study sheet draft for For Loops",
           waitingForInput: true,
           message:
@@ -28,7 +41,11 @@ test("topic submit opens interrupt and yes returns the pdf link", async ({ page 
       return;
     }
 
-    expect(body.input).toBe("yes");
+    expect(body.input).toBe("");
+    expect(body.resume_skill_interrupt).toEqual({
+      interrupt,
+      resumeData: "yes"
+    });
 
     await route.fulfill({
       status: 200,
