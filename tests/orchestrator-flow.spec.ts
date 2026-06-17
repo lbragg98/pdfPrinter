@@ -2,6 +2,8 @@ import { expect, test } from "@playwright/test";
 
 test("topic submit opens interrupt and yes returns the pdf link", async ({ page }) => {
   const pdfUrl = "https://example.com/for-loops-study-sheet.pdf";
+  const finalMessage =
+    `Your clean, beginner-friendly Python study sheet PDF is ready to download: ${pdfUrl}`;
   const interrupt = {
     skillId: "skill-export-pdf",
     skillName: "Export PDF",
@@ -49,15 +51,18 @@ test("topic submit opens interrupt and yes returns the pdf link", async ({ page 
 
     await route.fulfill({
       status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        result: {
-          study_sheet:
-            `Your clean, beginner-friendly Python study sheet PDF is ready to download: ${pdfUrl}`
-        },
-        download_url: pdfUrl,
-        message: "Your PDF is ready."
-      })
+      contentType: "text/event-stream",
+      body: [
+        { chunk: "Your" },
+        { chunk: " clean, beginner-friendly Python study sheet PDF is ready to download: " },
+        { chunk: pdfUrl },
+        { download_url: pdfUrl },
+        "[DONE]"
+      ]
+        .map((event) =>
+          typeof event === "string" ? `data: ${event}\n\n` : `data: ${JSON.stringify(event)}\n\n`
+        )
+        .join("")
     });
   });
 
@@ -73,4 +78,5 @@ test("topic submit opens interrupt and yes returns the pdf link", async ({ page 
     "href",
     pdfUrl
   );
+  await expect(page.getByText(finalMessage)).toBeVisible();
 });

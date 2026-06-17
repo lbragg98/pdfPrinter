@@ -143,9 +143,13 @@ function extractBestText(text: string, contentType: string | null) {
 
 export function normalizeAgentResponse(raw: string, extractedText: string): OrchestratorResponse {
   const parsed = parseJson(raw);
-  const fields = raw.includes("data:") ? collectFieldsFromSse(raw) : emptyFields();
+  const isSse = raw.includes("data:");
+  const fields = isSse ? collectFieldsFromSse(raw) : emptyFields();
   collectAgentFields(parsed, fields);
-  const text = fields.text || extractedText.trim() || fields.studySheet;
+  const trimmedExtractedText = extractedText.trim();
+  const assembledSseText =
+    isSse && trimmedExtractedText !== raw.trim() ? trimmedExtractedText : "";
+  const text = assembledSseText || fields.text || trimmedExtractedText || fields.studySheet;
   const downloadUrl =
     fields.downloadUrl ||
     extractFirstUrl(fields.studySheet) ||
@@ -161,7 +165,7 @@ export function normalizeAgentResponse(raw: string, extractedText: string): Orch
     text,
     studySheet: fields.studySheet || text,
     downloadUrl,
-    message: fields.message || fields.studySheet || text,
+    message: assembledSseText || fields.message || fields.studySheet || text,
     interruptRequested,
     interruptNodeId,
     interrupt: fields.interrupt,
