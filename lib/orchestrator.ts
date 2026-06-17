@@ -8,13 +8,31 @@ export type OrchestratorResponse = {
   message: string;
   interruptRequested: boolean;
   interruptNodeId: string;
+  interrupt: SkillInterruptPayload | null;
   waitingForInput: boolean;
+};
+
+export type SkillInterruptPayload = {
+  [key: string]: unknown;
+  skillId: string;
+  skillName: string;
+  skillThreadId: string;
+  node: string;
+  nodeLabel?: string;
+  feedbackRequest?: string;
+  state?: Record<string, unknown>;
+};
+
+export type ResumeSkillInterrupt = {
+  interrupt: SkillInterruptPayload;
+  resumeData: unknown;
 };
 
 type RunPromptArgs = {
   threadId: string;
   input: string;
   traceId?: string;
+  resumeSkillInterrupt?: ResumeSkillInterrupt;
 };
 
 export function createThreadId(prefix: string) {
@@ -54,7 +72,8 @@ export function buildDownloadPrompt(
 export async function runOrchestratorPrompt({
   threadId,
   input,
-  traceId
+  traceId,
+  resumeSkillInterrupt
 }: RunPromptArgs): Promise<OrchestratorResponse> {
   console.log("[orchestrator client] request", {
     traceId: traceId || threadId,
@@ -70,7 +89,10 @@ export async function runOrchestratorPrompt({
     body: JSON.stringify({
       threadId,
       input,
-      traceId
+      traceId,
+      ...(resumeSkillInterrupt
+        ? { resume_skill_interrupt: resumeSkillInterrupt }
+        : {})
     })
   });
 
@@ -142,6 +164,7 @@ export function normalizeAgentResponse(raw: string, extractedText: string): Orch
     message: fields.message || fields.studySheet || text,
     interruptRequested,
     interruptNodeId,
+    interrupt: fields.interrupt,
     waitingForInput
   };
 }
@@ -160,6 +183,7 @@ type CollectedFields = {
   downloadUrl: string;
   message: string;
   interruptNodeId: string;
+  interrupt: SkillInterruptPayload | null;
   waitingForInput: boolean;
 };
 
@@ -186,6 +210,18 @@ function collectAgentFields(value: unknown, fields: CollectedFields = emptyField
 
   if (record.type === "skill_interrupt") {
     fields.waitingForInput = true;
+  }
+
+  if (record.waitingForInput === true || record.interruptRequested === true) {
+    fields.waitingForInput = true;
+  }
+
+  if (!fields.interrupt && isSkillInterruptPayload(interruptRecord)) {
+    fields.interrupt = interruptRecord;
+  }
+
+  if (!fields.interrupt && isSkillInterruptPayload(record)) {
+    fields.interrupt = record;
   }
 
   const explicitInterruptNodeId = extractFirstString([
@@ -281,8 +317,24 @@ function emptyFields(): CollectedFields {
     downloadUrl: "",
     message: "",
     interruptNodeId: "",
+    interrupt: null,
     waitingForInput: false
   };
+}
+
+function isSkillInterruptPayload(value: unknown): value is SkillInterruptPayload {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+
+  return (
+    typeof record.skillId === "string" &&
+    typeof record.skillName === "string" &&
+    typeof record.skillThreadId === "string" &&
+    typeof record.node === "string"
+  );
 }
 
 function setFirstString(fields: CollectedFields, key: StringFieldKey, value: unknown) {

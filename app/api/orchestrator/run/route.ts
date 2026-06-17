@@ -4,12 +4,17 @@ import {
   ORCHESTRATOR_RUN_API_KEY,
   ORCHESTRATOR_RUN_PATH
 } from "../../../../lib/orchestrator-config";
-import { extractTextFromSse, normalizeAgentResponse } from "../../../../lib/orchestrator";
+import {
+  extractTextFromSse,
+  normalizeAgentResponse,
+  type ResumeSkillInterrupt
+} from "../../../../lib/orchestrator";
 
 type OrchestratorRunBody = {
   threadId?: string;
   input?: string;
   traceId?: string;
+  resume_skill_interrupt?: ResumeSkillInterrupt;
 };
 
 export async function POST(request: Request) {
@@ -27,17 +32,21 @@ export async function POST(request: Request) {
 
   const body = (await request.json()) as OrchestratorRunBody;
 
-  if (!body.threadId || !body.input) {
+  const input = typeof body.input === "string" ? body.input : "";
+  const isResumeRequest = Boolean(body.resume_skill_interrupt?.interrupt);
+
+  if (!body.threadId || (!input && !isResumeRequest)) {
     return Response.json({ error: "threadId and input are required." }, { status: 400 });
   }
 
-  const stopOnInterrupt = !isConfirmationReply(body.input);
+  const stopOnInterrupt = !isConfirmationReply(input);
 
   console.log("[orchestrator route] request", {
     traceId: body.traceId || body.threadId,
     threadId: body.threadId,
     stopOnInterrupt,
-    inputPreview: body.input.slice(0, 240)
+    isResumeRequest,
+    inputPreview: input.slice(0, 240)
   });
 
   const normalized = await runSingleUpstreamRun(body, stopOnInterrupt);
@@ -65,8 +74,11 @@ async function runSingleUpstreamRun(body: OrchestratorRunBody, stopOnInterrupt: 
     body: JSON.stringify({
       projectId: ORCHESTRATOR_PROJECT_ID,
       threadId: body.threadId,
-      input: body.input,
-      traceId: body.traceId
+      input: typeof body.input === "string" ? body.input : "",
+      traceId: body.traceId,
+      ...(body.resume_skill_interrupt
+        ? { resume_skill_interrupt: body.resume_skill_interrupt }
+        : {})
     }),
     cache: "no-store"
   });
@@ -118,9 +130,29 @@ async function readUpstreamBody(response: Response, stopOnInterrupt: boolean) {
 }
 
 function hasCompleteInterrupt(raw: string) {
-  const normalized = raw.toLowerCase();
+  for (const eventBlock of raw.split(/\n\s*\n/)) {
+    const dataLines = eventBlock
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith("data:"))
+      .map((line) => line.slice(5).trimStart());
 
-  return normalized.includes("skill_interrupt") && /"node":"interrupt_[^"]+"/i.test(raw);
+    for (const data of dataLines) {
+      if (!data || data === "[DONE]") {
+        continue;
+      }
+
+      try {
+        const parsed = JSON.parse(data) as Record<string, unknown>;
+        if (parsed.type === "skill_interrupt" && parsed.interrupt) {
+          return true;
+        }
+      } catch {
+        // Wait for a complete JSON event before stopping the stream early.
+      }
+    }
+  }
+
+  return false;
 }
 
 function isConfirmationReply(input: string) {
