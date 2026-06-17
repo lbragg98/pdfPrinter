@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test("topic submit opens interrupt and yes returns the pdf link", async ({ page }) => {
   const pdfUrl = "https://example.com/for-loops-study-sheet.pdf";
+  const dirtyPdfUrl = `${pdfUrl})`;
   const finalMessage =
     `Your clean, beginner-friendly Python study sheet PDF is ready to download: ${pdfUrl}`;
   const interrupt = {
@@ -56,7 +57,7 @@ test("topic submit opens interrupt and yes returns the pdf link", async ({ page 
         { chunk: "Your" },
         { chunk: " clean, beginner-friendly Python study sheet PDF is ready to download: " },
         { chunk: pdfUrl },
-        { download_url: pdfUrl },
+        { download_url: dirtyPdfUrl },
         "[DONE]"
       ]
         .map((event) =>

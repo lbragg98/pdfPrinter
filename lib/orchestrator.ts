@@ -151,7 +151,7 @@ export function normalizeAgentResponse(raw: string, extractedText: string): Orch
     isSse && trimmedExtractedText !== raw.trim() ? trimmedExtractedText : "";
   const text = assembledSseText || fields.text || trimmedExtractedText || fields.studySheet;
   const downloadUrl =
-    fields.downloadUrl ||
+    cleanUrlCandidate(fields.downloadUrl) ||
     extractFirstUrl(fields.studySheet) ||
     extractFirstUrl(text) ||
     extractFirstUrl(raw);
@@ -347,7 +347,7 @@ function setFirstString(fields: CollectedFields, key: StringFieldKey, value: unk
   }
 
   if (typeof value === "string" && value.trim()) {
-    fields[key] = value.trim();
+    fields[key] = key === "downloadUrl" ? cleanUrlCandidate(value) : value.trim();
   }
 }
 
@@ -362,7 +362,11 @@ function extractFirstString(values: unknown[]) {
 }
 
 function extractFirstUrl(text: string) {
-  return text.match(/https?:\/\/\S+/i)?.[0] ?? "";
+  return cleanUrlCandidate(text.match(/https?:\/\/\S+/i)?.[0] ?? "");
+}
+
+function cleanUrlCandidate(value: string) {
+  return value.trim().replace(/[)\].,;:!?'""]+$/g, "");
 }
 
 function extractInterruptNodeId(parsed: unknown, raw: string): string {
@@ -428,36 +432,6 @@ function extractInterruptNodeId(parsed: unknown, raw: string): string {
   }
 
   return "";
-}
-
-function detectInterruptRequest(parsed: unknown, raw: string, text: string) {
-  const normalized = [parsed, raw, text]
-    .map((candidate) => {
-      if (typeof candidate === "string") {
-        return candidate;
-      }
-
-      if (!candidate || typeof candidate !== "object") {
-        return "";
-      }
-
-      const record = candidate as Record<string, unknown>;
-      return [
-        record.message,
-        record.text,
-        record.output,
-        record.response,
-        record.content
-      ]
-        .filter((value): value is string => typeof value === "string")
-        .join("\n");
-    })
-    .join("\n")
-    .toLowerCase();
-
-  return (
-    normalized.includes("would you like me to turn this into a downloadable pdf")
-  );
 }
 
 function detectWaitingForInput(parsed: unknown, raw: string, text: string) {
