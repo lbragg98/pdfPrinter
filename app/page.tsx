@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { OrchestratorResponse } from "../lib/orchestrator";
+import type { OrchestratorResponse, SkillInterruptPayload } from "../lib/orchestrator";
 import {
   buildStudySheetPrompt,
   createThreadId,
@@ -37,6 +37,7 @@ export default function Page() {
   const [downloadUrl, setDownloadUrl] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [needsConfirmation, setNeedsConfirmation] = useState(false);
+  const [pendingInterrupt, setPendingInterrupt] = useState<SkillInterruptPayload | null>(null);
   const [showDownloadLink, setShowDownloadLink] = useState(false);
   const [confirmMessage, setConfirmMessage] = useState(
     "A study sheet has been created. Do you want to make a printable PDF?"
@@ -64,6 +65,7 @@ export default function Page() {
     setShowDownloadLink(false);
     setDownloadUrl("");
     setNeedsConfirmation(false);
+    setPendingInterrupt(null);
     setOutput("Creating the study sheet...");
 
     try {
@@ -92,6 +94,7 @@ export default function Page() {
           "A study sheet has been created. Do you want to make a printable PDF?"
       );
       setNeedsConfirmation(response.waitingForInput);
+      setPendingInterrupt(response.waitingForInput ? response.interrupt : null);
       setFlowState(response.waitingForInput ? "waiting" : "idle");
 
       if (!response.waitingForInput && response.downloadUrl) {
@@ -108,6 +111,15 @@ export default function Page() {
   };
 
   const handleConfirmYes = async () => {
+    const interrupt = pendingInterrupt;
+
+    if (!interrupt) {
+      setFlowState("idle");
+      setNeedsConfirmation(false);
+      setOutput("PDF generation failed: the paused workflow did not return an interrupt payload to resume.");
+      return;
+    }
+
     console.log("[page] confirm yes", {
       traceId,
       threadId
@@ -116,15 +128,20 @@ export default function Page() {
     setIsLoading(true);
     setFlowState("creatingPdf");
     setNeedsConfirmation(false);
+    setPendingInterrupt(null);
     setConfirmMessage("Creating the printable PDF...");
     setOutput("Creating the printable PDF...");
 
     try {
-      console.log("[page] confirmation accepted", { threadId, input: "yes" });
+      console.log("[page] confirmation accepted", { threadId, interruptNode: interrupt.node });
       const response: OrchestratorResponse = await runOrchestratorPrompt({
         threadId,
-        input: "yes",
-        traceId
+        input: "",
+        traceId,
+        resumeSkillInterrupt: {
+          interrupt,
+          resumeData: "yes"
+        }
       });
       const nextDownloadUrl = response.downloadUrl || "";
 
@@ -152,6 +169,8 @@ export default function Page() {
       const message = error instanceof Error ? error.message : "Unknown error";
       console.log("[page] confirm yes error", { traceId, message });
       setFlowState("idle");
+      setPendingInterrupt(interrupt);
+      setNeedsConfirmation(true);
       setOutput(`PDF generation failed: ${message}`);
     } finally {
       setIsLoading(false);
@@ -166,6 +185,7 @@ export default function Page() {
 
     setFlowState("idle");
     setNeedsConfirmation(false);
+    setPendingInterrupt(null);
     setShowDownloadLink(false);
     setDownloadUrl("");
     setConfirmMessage("A study sheet has been created. Do you want to make a printable PDF?");
