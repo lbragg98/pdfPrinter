@@ -4,12 +4,42 @@ export type OrchestratorResponse = {
   raw: string;
   text: string;
   studySheet: string;
+  structuredResponse: unknown;
+  quizResponse: QuizResponse | null;
   downloadUrl: string;
   message: string;
   interruptRequested: boolean;
   interruptNodeId: string;
   interrupt: SkillInterruptPayload | null;
   waitingForInput: boolean;
+};
+
+export type AnswerLetter = "A" | "B" | "C" | "D";
+
+export type QuizResponse = {
+  AnswerKey: AnswerLetter[];
+  Questions: QuizQuestion[];
+};
+
+export type QuizQuestion = {
+  Answers: string[];
+  CorrectAnswer: AnswerLetter;
+  QuestionTitle: string;
+};
+
+export type StreamMessageEvent = {
+  type: "message";
+  message?: string;
+  chunk?: string;
+  text?: string;
+};
+
+export type StreamDoneEvent = {
+  type: "done";
+  deploymentId: string;
+  environment: string;
+  message: string;
+  structuredResponse: unknown;
 };
 
 export type SkillInterruptPayload = {
@@ -46,26 +76,39 @@ export function createThreadId(prefix: string) {
 
 export function buildStudySheetPrompt(topic: string) {
   return JSON.stringify({
-    request: `Create a study sheet for Python '${topic.trim()}' including practice questions and explanations.`
+    request: `'${topic.trim()}'`,
+    quizResponseSchema: {
+      AnswerKey: ["C", "D", "A", "B", "C", "A", "D", "B", "C", "A"],
+      Questions: [
+        {
+          Answers: [
+            "They can see in complete darkness",
+            "They have a specialized reflective layer behind their retina",
+            "Their eyes are larger than those of other animals",
+            "Their pupils can change shape",
+          ],
+          CorrectAnswer: "B",
+          QuestionTitle:
+            "What gives cats the ability to see well in low light conditions?",
+        },
+      ],
+    },
+    quizInstructions:
+      "If quizzes are generated, return them as valid JSON that follows quizResponseSchema exactly. Keep the study sheet and quizzes separate.",
   });
 }
 
 export function buildDownloadPrompt(
   topic: string,
   studySheet: string,
-  confirmationResponse = "Yes"
+  confirmationResponse = "Yes",
 ) {
   return [
-    "Study Sheet Builder",
-    "The user confirmed they want a printable PDF.",
+    "Keep the study sheet and quizzes separate.",
     `User confirmation: ${confirmationResponse.trim()}`,
     "Return only valid JSON with these keys:",
-    '{ "download_url": string, "message": string }',
-    "download_url must be the full downloadable PDF URL.",
-    "message should briefly confirm the PDF is ready.",
-    "",
     `Topic: ${topic.trim()}`,
-    `Study sheet draft: ${studySheet.trim()}`
+    `Study sheet draft: ${studySheet.trim()}`,
   ].join("\n");
 }
 
@@ -73,18 +116,18 @@ export async function runOrchestratorPrompt({
   threadId,
   input,
   traceId,
-  resumeSkillInterrupt
+  resumeSkillInterrupt,
 }: RunPromptArgs): Promise<OrchestratorResponse> {
   console.log("[orchestrator client] request", {
     traceId: traceId || threadId,
     threadId,
-    inputPreview: input.slice(0, 220)
+    inputPreview: input.slice(0, 220),
   });
 
   const response = await fetch("/api/orchestrator/run", {
     method: "POST",
     headers: {
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
       threadId,
@@ -92,14 +135,16 @@ export async function runOrchestratorPrompt({
       traceId,
       ...(resumeSkillInterrupt
         ? { resume_skill_interrupt: resumeSkillInterrupt }
-        : {})
-    })
+        : {}),
+    }),
   });
 
   const raw = await response.text();
 
   if (!response.ok) {
-    throw new Error(raw || `Orchestrator request failed with status ${response.status}.`);
+    throw new Error(
+      raw || `Orchestrator request failed with status ${response.status}.`,
+    );
   }
 
   const contentType = response.headers.get("content-type");
@@ -117,7 +162,7 @@ export async function runOrchestratorPrompt({
     interruptNodeId: normalized.interruptNodeId || "(missing)",
     downloadUrl: normalized.downloadUrl || "(missing)",
     messagePreview: normalized.message.slice(0, 220),
-    studySheetPreview: normalized.studySheet.slice(0, 220)
+    studySheetPreview: normalized.studySheet.slice(0, 220),
   });
 
   return normalized;
@@ -141,7 +186,10 @@ function extractBestText(text: string, contentType: string | null) {
   return fields.text || text.trim();
 }
 
-export function normalizeAgentResponse(raw: string, extractedText: string): OrchestratorResponse {
+export function normalizeAgentResponse(
+  raw: string,
+  extractedText: string,
+): OrchestratorResponse {
   const parsed = parseJson(raw);
   const isSse = raw.includes("data:");
   const fields = isSse ? collectFieldsFromSse(raw) : emptyFields();
@@ -149,27 +197,42 @@ export function normalizeAgentResponse(raw: string, extractedText: string): Orch
   const trimmedExtractedText = extractedText.trim();
   const assembledSseText =
     isSse && trimmedExtractedText !== raw.trim() ? trimmedExtractedText : "";
-  const text = assembledSseText || fields.text || trimmedExtractedText || fields.studySheet;
+  const text =
+    assembledSseText ||
+    fields.text ||
+    trimmedExtractedText ||
+    fields.studySheet;
+  const quizResponse =
+    extractQuizResponseFromDoneEvent(parsed) ||
+    fields.quizResponse ||
+    extractQuizResponse(parsed) ||
+    extractQuizResponse(text) ||
+    extractQuizResponse(raw);
   const downloadUrl =
     cleanUrlCandidate(fields.downloadUrl) ||
     extractFirstUrl(fields.studySheet) ||
     extractFirstUrl(text) ||
     extractFirstUrl(raw);
   const waitingForInput =
-    (fields.waitingForInput || detectWaitingForInput(parsed, raw, text)) && !downloadUrl;
+    (fields.waitingForInput || detectWaitingForInput(parsed, raw, text)) &&
+    !downloadUrl;
   const interruptRequested = waitingForInput;
-  const interruptNodeId = fields.interruptNodeId || extractInterruptNodeId(parsed, raw);
+  const interruptNodeId =
+    fields.interruptNodeId || extractInterruptNodeId(parsed, raw);
 
   return {
     raw,
     text,
     studySheet: fields.studySheet || text,
+    structuredResponse:
+      fields.structuredResponse ?? extractStructuredResponse(parsed),
+    quizResponse,
     downloadUrl,
     message: assembledSseText || fields.message || fields.studySheet || text,
     interruptRequested,
     interruptNodeId,
     interrupt: fields.interrupt,
-    waitingForInput
+    waitingForInput,
   };
 }
 
@@ -184,6 +247,8 @@ function parseJson(text: string) {
 type CollectedFields = {
   text: string;
   studySheet: string;
+  structuredResponse: unknown;
+  quizResponse: QuizResponse | null;
   downloadUrl: string;
   message: string;
   interruptNodeId: string;
@@ -191,9 +256,17 @@ type CollectedFields = {
   waitingForInput: boolean;
 };
 
-type StringFieldKey = "text" | "studySheet" | "downloadUrl" | "message" | "interruptNodeId";
+type StringFieldKey =
+  | "text"
+  | "studySheet"
+  | "downloadUrl"
+  | "message"
+  | "interruptNodeId";
 
-function collectAgentFields(value: unknown, fields: CollectedFields = emptyFields()): CollectedFields {
+function collectAgentFields(
+  value: unknown,
+  fields: CollectedFields = emptyFields(),
+): CollectedFields {
   if (typeof value === "string") {
     const trimmed = value.trim();
     if (trimmed && !fields.text) {
@@ -207,6 +280,18 @@ function collectAgentFields(value: unknown, fields: CollectedFields = emptyField
   }
 
   const record = value as Record<string, unknown>;
+  const doneEvent = isStreamDoneEvent(record) ? record : null;
+  if (doneEvent) {
+    fields.message = doneEvent.message;
+    fields.text = doneEvent.message;
+    if (fields.structuredResponse === null) {
+      fields.structuredResponse = doneEvent.structuredResponse;
+    }
+    if (!fields.quizResponse) {
+      fields.quizResponse = extractQuizResponse(doneEvent.structuredResponse);
+    }
+  }
+
   const interruptRecord =
     record.interrupt && typeof record.interrupt === "object"
       ? (record.interrupt as Record<string, unknown>)
@@ -228,13 +313,17 @@ function collectAgentFields(value: unknown, fields: CollectedFields = emptyField
     fields.interrupt = record;
   }
 
+  if (!fields.quizResponse) {
+    fields.quizResponse = extractQuizResponse(record);
+  }
+
   const explicitInterruptNodeId = extractFirstString([
     interruptRecord?.node,
     interruptRecord?.nodeId,
     interruptRecord?.interrupt_node_id,
     interruptRecord?.interruptNodeId,
     interruptRecord?.interrupt_node,
-    interruptRecord?.interruptNode
+    interruptRecord?.interruptNode,
   ]);
 
   if (explicitInterruptNodeId) {
@@ -244,6 +333,9 @@ function collectAgentFields(value: unknown, fields: CollectedFields = emptyField
   setFirstString(fields, "studySheet", record.study_sheet);
   setFirstString(fields, "studySheet", record.study_questions);
   setFirstString(fields, "studySheet", record.created_questions);
+  if (fields.structuredResponse === null && "structuredResponse" in record) {
+    fields.structuredResponse = record.structuredResponse;
+  }
   setFirstString(fields, "downloadUrl", record.download_url);
   setFirstString(fields, "downloadUrl", record.pdf_url);
   setFirstString(fields, "message", record.message);
@@ -303,7 +395,7 @@ function collectAgentFields(value: unknown, fields: CollectedFields = emptyField
       record.response,
       record.text,
       record.chunk,
-      record.content
+      record.content,
     ]);
 
     if (fallback) {
@@ -318,15 +410,19 @@ function emptyFields(): CollectedFields {
   return {
     text: "",
     studySheet: "",
+    structuredResponse: null,
+    quizResponse: null,
     downloadUrl: "",
     message: "",
     interruptNodeId: "",
     interrupt: null,
-    waitingForInput: false
+    waitingForInput: false,
   };
 }
 
-function isSkillInterruptPayload(value: unknown): value is SkillInterruptPayload {
+function isSkillInterruptPayload(
+  value: unknown,
+): value is SkillInterruptPayload {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return false;
   }
@@ -341,13 +437,208 @@ function isSkillInterruptPayload(value: unknown): value is SkillInterruptPayload
   );
 }
 
-function setFirstString(fields: CollectedFields, key: StringFieldKey, value: unknown) {
+function isQuizResponse(value: unknown): value is QuizResponse {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+
+  return (
+    Array.isArray(record.AnswerKey) &&
+    record.AnswerKey.every((entry) => isAnswerLetter(entry)) &&
+    Array.isArray(record.Questions) &&
+    record.Questions.every((question) => {
+      if (
+        !question ||
+        typeof question !== "object" ||
+        Array.isArray(question)
+      ) {
+        return false;
+      }
+
+      const questionRecord = question as Record<string, unknown>;
+      return (
+        Array.isArray(questionRecord.Answers) &&
+        questionRecord.Answers.every((entry) => typeof entry === "string") &&
+        isAnswerLetter(questionRecord.CorrectAnswer) &&
+        typeof questionRecord.QuestionTitle === "string"
+      );
+    })
+  );
+}
+
+function isAnswerLetter(value: unknown): value is AnswerLetter {
+  return value === "A" || value === "B" || value === "C" || value === "D";
+}
+
+function isStreamDoneEvent(value: unknown): value is StreamDoneEvent {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+
+  return (
+    record.type === "done" &&
+    typeof record.deploymentId === "string" &&
+    typeof record.environment === "string" &&
+    typeof record.message === "string" &&
+    "structuredResponse" in record
+  );
+}
+
+function isStreamMessageEvent(value: unknown): value is StreamMessageEvent {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+  return record.type === "message";
+}
+
+export function extractQuizResponse(value: unknown): QuizResponse | null {
+  if (typeof value === "string") {
+    return (
+      extractQuizResponseFromText(value) ||
+      extractQuizResponse(parseJson(value))
+    );
+  }
+
+  if (isStreamDoneEvent(value)) {
+    return isQuizResponse(value.structuredResponse)
+      ? value.structuredResponse
+      : extractQuizResponse(value.structuredResponse);
+  }
+
+  if (isQuizResponse(value)) {
+    return value;
+  }
+
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  return (
+    extractQuizResponse(record.quizzes) ||
+    extractQuizResponse(record.quiz_response) ||
+    extractQuizResponse(record.quizResponse) ||
+    extractQuizResponse(record.quiz)
+  );
+}
+
+function extractQuizResponseFromDoneEvent(value: unknown): QuizResponse | null {
+  if (!isStreamDoneEvent(value)) {
+    return null;
+  }
+
+  return isQuizResponse(value.structuredResponse)
+    ? value.structuredResponse
+    : extractQuizResponse(value.structuredResponse);
+}
+
+function extractQuizResponseFromText(text: string): QuizResponse | null {
+  const fencedBlocks = [...text.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)].map(
+    (match) => match[1].trim(),
+  );
+
+  for (const block of fencedBlocks) {
+    const quiz = extractQuizResponseFromJsonLikeText(block);
+    if (quiz) {
+      return quiz;
+    }
+  }
+
+  const direct = extractQuizResponseFromJsonLikeText(text);
+  if (direct) {
+    return direct;
+  }
+
+  return null;
+}
+
+function extractQuizResponseFromJsonLikeText(
+  text: string,
+): QuizResponse | null {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const parsed = parseJson(trimmed);
+  if (isQuizResponse(parsed)) {
+    return parsed;
+  }
+
+  for (const candidate of extractBalancedJsonCandidates(trimmed)) {
+    const candidateParsed = parseJson(candidate);
+    if (isQuizResponse(candidateParsed)) {
+      return candidateParsed;
+    }
+  }
+
+  return null;
+}
+
+function extractBalancedJsonCandidates(text: string) {
+  const candidates: string[] = [];
+  const stack: number[] = [];
+  let inString = false;
+  let escaped = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (char === "{") {
+      stack.push(index);
+      continue;
+    }
+
+    if (char !== "}" || stack.length === 0) {
+      continue;
+    }
+
+    const start = stack.pop();
+    if (start === undefined) {
+      continue;
+    }
+
+    const candidate = text.slice(start, index + 1);
+    candidates.push(candidate);
+  }
+
+  return candidates.sort((left, right) => right.length - left.length);
+}
+
+function setFirstString(
+  fields: CollectedFields,
+  key: StringFieldKey,
+  value: unknown,
+) {
   if (fields[key]) {
     return;
   }
 
   if (typeof value === "string" && value.trim()) {
-    fields[key] = key === "downloadUrl" ? cleanUrlCandidate(value) : value.trim();
+    fields[key] =
+      key === "downloadUrl" ? cleanUrlCandidate(value) : value.trim();
   }
 }
 
@@ -362,11 +653,25 @@ function extractFirstString(values: unknown[]) {
 }
 
 function extractFirstUrl(text: string) {
-  return cleanUrlCandidate(text.match(/https?:\/\/\S+/i)?.[0] ?? "");
+  const markdownLink = text.match(/\[[^\]]+\]\((https?:\/\/[^\s)]+)\)/i)?.[1];
+  if (markdownLink) {
+    return cleanUrlCandidate(markdownLink);
+  }
+
+  return cleanUrlCandidate(text.match(/https?:\/\/[^\s)]+/i)?.[0] ?? "");
 }
 
 function cleanUrlCandidate(value: string) {
   return value.trim().replace(/[)\].,;:!?'""]+$/g, "");
+}
+
+function extractStructuredResponse(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  return "structuredResponse" in record ? record.structuredResponse : null;
 }
 
 function extractInterruptNodeId(parsed: unknown, raw: string): string {
@@ -402,7 +707,7 @@ function extractInterruptNodeId(parsed: unknown, raw: string): string {
       record.interrupt_node,
       record.interruptNode,
       record.node,
-      record.nodeId
+      record.nodeId,
     ]);
 
     if (candidateId) {
@@ -454,7 +759,7 @@ function detectWaitingForInput(parsed: unknown, raw: string, text: string) {
         record.response,
         record.content,
         record.feedbackRequest,
-        record.feedback_request
+        record.feedback_request,
       ]
         .filter((value): value is string => typeof value === "string")
         .join("\n");
@@ -486,6 +791,11 @@ function collectFieldsFromSse(payload: string) {
 
       try {
         const parsed = JSON.parse(data) as unknown;
+        if (isStreamMessageEvent(parsed)) {
+          setFirstString(fields, "text", parsed.message);
+          setFirstString(fields, "text", parsed.chunk);
+          setFirstString(fields, "text", parsed.text);
+        }
         collectAgentFields(parsed, fields);
       } catch {
         if (!data.startsWith("{") && !data.startsWith("[")) {
@@ -500,6 +810,7 @@ function collectFieldsFromSse(payload: string) {
 
 export function extractTextFromSse(payload: string) {
   const pieces: string[] = [];
+  let finalMessage = "";
 
   for (const eventBlock of payload.split(/\n\s*\n/)) {
     const dataLines = eventBlock
@@ -515,10 +826,12 @@ export function extractTextFromSse(payload: string) {
       try {
         const parsed = JSON.parse(data) as Record<string, unknown>;
         const nestedData = parsed.data as Record<string, unknown> | undefined;
+        if (parsed.type === "done" && typeof parsed.message === "string") {
+          finalMessage = parsed.message;
+        }
 
         const chunk =
           (typeof parsed.chunk === "string" && parsed.chunk) ||
-          (typeof parsed.message === "string" && parsed.message) ||
           (typeof parsed.text === "string" && parsed.text) ||
           (typeof nestedData?.chunk === "string" && nestedData.chunk) ||
           (typeof nestedData?.message === "string" && nestedData.message) ||
@@ -534,6 +847,10 @@ export function extractTextFromSse(payload: string) {
         }
       }
     }
+  }
+
+  if (finalMessage) {
+    return finalMessage.trim();
   }
 
   const combined = pieces.join("").trim();
