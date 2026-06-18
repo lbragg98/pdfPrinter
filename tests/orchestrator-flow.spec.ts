@@ -27,7 +27,7 @@ test("topic submit opens interrupt and yes returns the pdf link", async ({ page 
     };
 
     if (requestCount === 1) {
-      expect(body.input).toContain("For Loops");
+      expect(body.input).toBe("python Study sheet about For Loops");
 
       await route.fulfill({
         status: 200,
@@ -68,6 +68,7 @@ test("topic submit opens interrupt and yes returns the pdf link", async ({ page 
 
   await page.goto("/");
 
+  await page.getByRole("tab", { name: "Study Sheet" }).click();
   await page.getByRole("textbox", { name: "Topic" }).fill("For Loops");
   await page.getByRole("button", { name: "Send topic" }).click();
 
