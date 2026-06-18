@@ -1,10 +1,5 @@
 {
   "pages": {
-    "/api/orchestrator/run/route": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/api/orchestrator/run/route.js"
-    ],
     "/layout": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
