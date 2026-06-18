@@ -7,7 +7,6 @@ import type {
   SkillInterruptPayload
 } from "../lib/orchestrator";
 import {
-  buildStudySheetPrompt,
   createThreadId,
   runOrchestratorPrompt
 } from "../lib/orchestrator";
@@ -99,6 +98,8 @@ function renderInline(text: string): ReactNode {
   return parts.length ? <>{parts}</> : text;
 }
 
+type GenerationMode = "study-sheet" | "quiz";
+
 function hasInterrupt(response: OrchestratorResponse) {
   return Boolean(
     response.interrupt ||
@@ -132,7 +133,19 @@ function isQuizResponse(value: unknown): value is QuizResponse {
   );
 }
 
-function getQuizResponse(response: OrchestratorResponse) {
+function buildPrompt(topic: string, mode: GenerationMode) {
+  if (mode === "study-sheet") {
+    return `python Study sheet about ${topic}`;
+  }
+
+  return `make a quiz about ${topic}`;
+}
+
+function getQuizResponse(response: OrchestratorResponse, mode: GenerationMode) {
+  if (mode === "study-sheet") {
+    return null;
+  }
+
   if (isQuizResponse(response.structuredResponse)) {
     return response.structuredResponse;
   }
@@ -272,6 +285,7 @@ function QuizPreview({ quiz }: { quiz: QuizResponse }) {
 
 export default function Page() {
   const [topic, setTopic] = useState("");
+  const [mode, setMode] = useState<GenerationMode>("quiz");
   const [output, setOutput] = useState(
     "Enter a topic to generate the first study sheet draft."
   );
@@ -319,12 +333,12 @@ export default function Page() {
     setPendingInterrupt(null);
     setPendingInterruptNodeId("");
     setQuizResponse(null);
-    setOutput("Creating the study sheet...");
+    setOutput(mode === "quiz" ? "Creating the quiz..." : "Creating the study sheet...");
 
     try {
       const response: OrchestratorResponse = await runOrchestratorPrompt({
         threadId,
-        input: buildStudySheetPrompt(trimmed),
+        input: buildPrompt(trimmed, mode),
         traceId
       });
       console.log("[page] create response", {
@@ -342,9 +356,14 @@ export default function Page() {
         });
       }
       setOutput(
-        response.downloadUrl
-          ? "Your Downloadable PDF is below"
-          : response.studySheet || response.text || "The agent returned no study sheet text."
+        mode === "quiz"
+          ? response.downloadUrl
+            ? "Your Downloadable PDF is below"
+            : response.studySheet || response.text || "The agent returned no study sheet text."
+          : response.studySheet ||
+              response.text ||
+              response.message ||
+              "The agent returned no study sheet text."
       );
       setConfirmMessage(
         response.waitingForInput
@@ -359,7 +378,7 @@ export default function Page() {
           ? response.interruptNodeId || response.interrupt?.node || ""
           : ""
       );
-      setQuizResponse(hasInterrupt(response) ? null : getQuizResponse(response));
+      setQuizResponse(hasInterrupt(response) ? null : getQuizResponse(response, mode));
       setFlowState(response.waitingForInput ? "waiting" : "idle");
 
       if (!response.waitingForInput && response.downloadUrl) {
@@ -444,13 +463,18 @@ export default function Page() {
         );
         setOutput(response.message || "Creating the printable PDF...");
       } else {
-        setQuizResponse(getQuizResponse(response));
+        setQuizResponse(getQuizResponse(response, mode));
         setFlowState(nextDownloadUrl ? "complete" : "creatingPdf");
         setOutput(
-          response.downloadUrl
-            ? "Your Downloadable PDF is below"
-            : response.message ||
+          mode === "quiz"
+            ? response.downloadUrl
+              ? "Your Downloadable PDF is below"
+              : response.message ||
+                response.text ||
+                "The PDF export is still processing. The workflow has not produced a download link yet."
+            : response.studySheet ||
               response.text ||
+              response.message ||
               "The PDF export is still processing. The workflow has not produced a download link yet."
         );
       }
@@ -493,6 +517,27 @@ export default function Page() {
           <p className="hero-kicker">Study Sheet Builder</p>
 
           <h1>What topic do you want the agent to turn into a study sheet?</h1>
+
+          <div className="mode-switch" role="tablist" aria-label="Generation mode">
+            <button
+              className={`mode-switch-option ${mode === "study-sheet" ? "is-active" : ""}`}
+              type="button"
+              role="tab"
+              aria-selected={mode === "study-sheet"}
+              onClick={() => setMode("study-sheet")}
+            >
+              Study Sheet
+            </button>
+            <button
+              className={`mode-switch-option ${mode === "quiz" ? "is-active" : ""}`}
+              type="button"
+              role="tab"
+              aria-selected={mode === "quiz"}
+              onClick={() => setMode("quiz")}
+            >
+              Quiz
+            </button>
+          </div>
 
           <form className="prompt-shell" onSubmit={handleSubmit}>
             <div className="prompt-icon" aria-hidden="true">
@@ -547,7 +592,7 @@ export default function Page() {
                   )}
                 </div>
               ) : null}
-              {quizResponse ? <QuizPreview quiz={quizResponse} /> : null}
+              {mode === "quiz" && quizResponse ? <QuizPreview quiz={quizResponse} /> : null}
             </div>
           </section>
         </div>
