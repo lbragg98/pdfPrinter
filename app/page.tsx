@@ -394,7 +394,59 @@ export default function Page() {
     }
   };
 
-  const handleConfirmYes = async () => {
+  const applyConfirmationResponse = (
+    response: OrchestratorResponse,
+    confirmation: "yes" | "no"
+  ) => {
+    const nextDownloadUrl = response.downloadUrl || "";
+
+    console.log("[page] post-confirmation response", {
+      traceId,
+      confirmation,
+      waitingForInput: response.waitingForInput,
+      downloadUrl: response.downloadUrl || "(missing)",
+      messagePreview: response.message.slice(0, 200),
+      studySheetPreview: response.studySheet.slice(0, 200)
+    });
+
+    setDownloadUrl(nextDownloadUrl);
+    setShowDownloadLink(Boolean(nextDownloadUrl));
+    if (hasInterrupt(response)) {
+      setFlowState("waiting");
+      setNeedsConfirmation(true);
+      setPendingInterrupt(response.interrupt);
+      setPendingInterruptNodeId(response.interruptNodeId || response.interrupt?.node || "");
+      setQuizResponse(null);
+      setConfirmMessage(
+        response.message ||
+          "Skill export to pdf is waiting for human input at node Interrupt."
+      );
+      setOutput(response.message || "Creating the printable PDF...");
+      return;
+    }
+
+    setQuizResponse(getQuizResponse(response, mode));
+    setFlowState(nextDownloadUrl ? "complete" : "creatingPdf");
+    setOutput(
+      confirmation === "no"
+        ? response.studySheet ||
+          response.text ||
+          response.message ||
+          "The PDF export is still processing. The workflow has not produced a download link yet."
+        : mode === "quiz"
+          ? response.downloadUrl
+            ? "Your Downloadable PDF is below"
+            : response.message ||
+              response.text ||
+              "The PDF export is still processing. The workflow has not produced a download link yet."
+          : response.studySheet ||
+            response.text ||
+            response.message ||
+            "The PDF export is still processing. The workflow has not produced a download link yet."
+    );
+  };
+
+  const handleConfirmation = async (resumeData: "yes" | "no") => {
     const interrupt = pendingInterrupt;
     const interruptNodeId = pendingInterruptNodeId || interrupt?.node || "";
 
@@ -407,7 +459,7 @@ export default function Page() {
       return;
     }
 
-    console.log("[page] confirm yes", {
+    console.log(`[page] confirm ${resumeData}`, {
       traceId,
       threadId
     });
@@ -419,13 +471,20 @@ export default function Page() {
     setPendingInterruptNodeId("");
     setQuizResponse(null);
     setConfirmMessage("Creating the printable PDF...");
-    setOutput("Creating the printable PDF...");
+    setOutput(
+      resumeData === "yes"
+        ? "Creating the printable PDF..."
+        : "Sending no response to the orchestrator..."
+    );
 
     try {
-      console.log("[page] confirmation accepted", {
-        threadId,
-        interruptNode: interruptNodeId
-      });
+      if (resumeData === "yes") {
+        console.log("[page] confirmation accepted", {
+          threadId,
+          interruptNode: interruptNodeId
+        });
+      }
+
       const response: OrchestratorResponse = await runOrchestratorPrompt({
         threadId,
         input: "",
@@ -436,51 +495,14 @@ export default function Page() {
             node: interruptNodeId,
             interrupt_node_id: interruptNodeId
           },
-          resumeData: "yes"
+          resumeData
         }
       });
-      const nextDownloadUrl = response.downloadUrl || "";
 
-      console.log("[page] post-confirmation response", {
-        traceId,
-        waitingForInput: response.waitingForInput,
-        downloadUrl: response.downloadUrl || "(missing)",
-        messagePreview: response.message.slice(0, 200),
-        studySheetPreview: response.studySheet.slice(0, 200)
-      });
-
-      setDownloadUrl(nextDownloadUrl);
-      setShowDownloadLink(Boolean(nextDownloadUrl));
-      if (hasInterrupt(response)) {
-        setFlowState("waiting");
-        setNeedsConfirmation(true);
-        setPendingInterrupt(response.interrupt);
-        setPendingInterruptNodeId(response.interruptNodeId || response.interrupt?.node || "");
-        setQuizResponse(null);
-        setConfirmMessage(
-          response.message ||
-            "Skill export to pdf is waiting for human input at node Interrupt."
-        );
-        setOutput(response.message || "Creating the printable PDF...");
-      } else {
-        setQuizResponse(getQuizResponse(response, mode));
-        setFlowState(nextDownloadUrl ? "complete" : "creatingPdf");
-        setOutput(
-          mode === "quiz"
-            ? response.downloadUrl
-              ? "Your Downloadable PDF is below"
-              : response.message ||
-                response.text ||
-                "The PDF export is still processing. The workflow has not produced a download link yet."
-            : response.studySheet ||
-              response.text ||
-              response.message ||
-              "The PDF export is still processing. The workflow has not produced a download link yet."
-        );
-      }
+      applyConfirmationResponse(response, resumeData);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
-      console.log("[page] confirm yes error", { traceId, message });
+      console.log(`[page] confirm ${resumeData} error`, { traceId, message });
       setFlowState("idle");
       setPendingInterrupt(interrupt);
       setPendingInterruptNodeId(interruptNodeId);
@@ -491,21 +513,12 @@ export default function Page() {
     }
   };
 
-  const handleConfirmNo = () => {
-    console.log("[page] confirm no", {
-      traceId,
-      threadId
-    });
+  const handleConfirmYes = () => {
+    void handleConfirmation("yes");
+  };
 
-    setFlowState("idle");
-    setNeedsConfirmation(false);
-    setPendingInterrupt(null);
-    setPendingInterruptNodeId("");
-    setShowDownloadLink(false);
-    setDownloadUrl("");
-    setQuizResponse(null);
-    setConfirmMessage("A study sheet has been created. Do you want to make a printable PDF?");
-    setOutput("PDF export canceled.");
+  const handleConfirmNo = () => {
+    void handleConfirmation("no");
   };
 
   return (
@@ -560,9 +573,12 @@ export default function Page() {
             </button>
           </form>
 
-          <section className="output-shell" aria-label="Study sheet output">
+          <section
+            className="output-shell"
+            aria-label={mode === "quiz" ? "Quiz output" : "Study sheet output"}
+          >
             <div className="output-header">
-              <span className="output-label">Output</span>
+              <span className="output-label">{mode === "quiz" ? "Quiz" : "Output"}</span>
               <span className="output-status">
                 {flowState === "generating"
                   ? "Generating study sheet..."
@@ -576,10 +592,14 @@ export default function Page() {
               </span>
             </div>
             <div className="output-card">
-              <p className="output-title">Study sheet preview</p>
-              <div className="output-copy markdown-output">
-                <MarkdownText content={output} />
-              </div>
+              {mode !== "quiz" ? (
+                <>
+                  <p className="output-title">Study sheet preview</p>
+                  <div className="output-copy markdown-output">
+                    <MarkdownText content={output} />
+                  </div>
+                </>
+              ) : null}
               {showDownloadLink ? (
                 <div className="download-row">
                   <span className="download-label">Printable PDF link</span>
