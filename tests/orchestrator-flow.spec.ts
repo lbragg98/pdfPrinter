@@ -166,7 +166,9 @@ test("topic submit opens interrupt and no keeps the flow going", async ({
   ).toBeVisible();
   await page.getByRole("button", { name: "No" }).click();
 
-  await expect(page.getByRole("dialog", { name: /confirm pdf creation/i })).toHaveCount(0);
+  await expect(
+    page.getByRole("dialog", { name: /confirm pdf creation/i }),
+  ).toHaveCount(0);
   await expect(page.getByText("Study sheet draft for For Loops")).toBeVisible();
   await expect(
     page.getByRole("link", { name: /download your pdf/i }),
@@ -218,4 +220,79 @@ test("quiz structuredResponse renders one question at a time", async ({
   await page.getByRole("button", { name: "Restart Quiz" }).click();
 
   await expect(page.getByText("Pick the second answer")).toBeVisible();
+});
+
+test("import flow uploads a file through the mcp import endpoint", async ({
+  page,
+}) => {
+  let orchestratorCalls = 0;
+  let postCalls = 0;
+
+  await page.route("**/api/orchestrator/run", async (route) => {
+    orchestratorCalls += 1;
+    const request = route.request();
+    const body = JSON.parse(request.postData() ?? "{}") as { input?: string };
+
+    expect(body.input).toBe(
+      'Using Scope-ID "logan-test", what is the most recently uploaded file to the MCP server?',
+    );
+
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        message: "Most recently uploaded file is notes.txt",
+      }),
+    });
+  });
+
+  await page.route("**/api/imports**", async (route) => {
+    const request = route.request();
+    const url = request.url();
+    const body = request.postData() ?? "";
+
+    if (request.method() === "POST" && url.endsWith("/api/imports")) {
+      postCalls += 1;
+      expect(request.headers()["content-type"]).toContain(
+        "multipart/form-data",
+      );
+      expect(body).toContain("notes.txt");
+
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: {
+            id: "upload-123",
+            message: "Import queued for notes.txt",
+          },
+          upstreamStatus: 202,
+        }),
+      });
+      return;
+    }
+
+    throw new Error(`Unexpected import request: ${request.method()} ${url}`);
+  });
+
+  await page.goto("/");
+
+  await page.getByRole("tab", { name: "Import" }).click();
+  await page.getByLabel("Upload file").setInputFiles({
+    name: "notes.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("hello from local file upload"),
+  });
+  await page.getByRole("button", { name: "Import file or URL" }).click();
+
+  await expect(
+    page.getByText("Uploaded notes.txt to the MCP server."),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "See upload" }).click();
+
+  await expect(
+    page.getByText("Most recently uploaded file is notes.txt"),
+  ).toBeVisible();
+  expect(postCalls).toBe(1);
+  expect(orchestratorCalls).toBe(1);
 });

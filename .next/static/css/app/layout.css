@@ -130,6 +130,42 @@ a {
   color: rgba(90, 106, 133, 0.72);
 }
 
+.file-upload-shell,
+.import-shell {
+  display: grid;
+  grid-gap: 8px;
+  gap: 8px;
+  min-width: 0;
+}
+
+.prompt-file-input {
+  width: 100%;
+  min-width: 0;
+  color: var(--muted);
+}
+
+.prompt-file-input::-webkit-file-upload-button {
+  margin-right: 12px;
+  padding: 0.7rem 1rem;
+  border: 1px solid rgba(44, 123, 217, 0.18);
+  border-radius: 999px;
+  background: rgba(44, 123, 217, 0.08);
+  color: var(--accent-deep);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.prompt-file-input::file-selector-button {
+  margin-right: 12px;
+  padding: 0.7rem 1rem;
+  border: 1px solid rgba(44, 123, 217, 0.18);
+  border-radius: 999px;
+  background: rgba(44, 123, 217, 0.08);
+  color: var(--accent-deep);
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .prompt-placeholder {
   color: rgba(90, 106, 133, 0.72);
   font-size: clamp(1.05rem, 1.4vw, 1.32rem);

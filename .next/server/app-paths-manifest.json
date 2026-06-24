@@ -1,3 +1,5 @@
 {
+  "/api/orchestrator/run/route": "app/api/orchestrator/run/route.js",
+  "/api/imports/route": "app/api/imports/route.js",
   "/page": "app/page.js"
 }
