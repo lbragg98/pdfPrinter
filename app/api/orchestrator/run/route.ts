@@ -1,14 +1,10 @@
 import {
-  ORCHESTRATOR_BASE_URL,
-  ORCHESTRATOR_PROJECT_ID,
-  ORCHESTRATOR_RUN_API_KEY,
-  ORCHESTRATOR_RUN_PATH
-} from "../../../../lib/orchestrator-config";
-import {
   extractTextFromSse,
   normalizeAgentResponse,
   type ResumeSkillInterrupt
 } from "../../../../lib/orchestrator";
+
+const ORCHESTRATOR_SCOPE_ID = "logan-test";
 
 type OrchestratorRunBody = {
   threadId?: string;
@@ -18,6 +14,13 @@ type OrchestratorRunBody = {
 };
 
 export async function POST(request: Request) {
+  const {
+    ORCHESTRATOR_BASE_URL,
+    ORCHESTRATOR_PROJECT_ID,
+    ORCHESTRATOR_RUN_API_KEY,
+    ORCHESTRATOR_RUN_PATH,
+  } = getOrchestratorConfig();
+
   if (!ORCHESTRATOR_RUN_API_KEY) {
     return Response.json({ error: "ORCHESTRATOR_RUN_API_KEY is not configured." }, { status: 500 });
   }
@@ -65,11 +68,19 @@ export async function POST(request: Request) {
 }
 
 async function runSingleUpstreamRun(body: OrchestratorRunBody, stopOnInterrupt: boolean) {
+  const {
+    ORCHESTRATOR_BASE_URL,
+    ORCHESTRATOR_PROJECT_ID,
+    ORCHESTRATOR_RUN_API_KEY,
+    ORCHESTRATOR_RUN_PATH,
+  } = getOrchestratorConfig();
+
   const upstreamResponse = await fetch(new URL(ORCHESTRATOR_RUN_PATH, ORCHESTRATOR_BASE_URL), {
     method: "POST",
     headers: {
       Authorization: `Bearer ${ORCHESTRATOR_RUN_API_KEY}`,
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      "Scope-ID": ORCHESTRATOR_SCOPE_ID
     },
     body: JSON.stringify({
       projectId: ORCHESTRATOR_PROJECT_ID,
@@ -158,4 +169,14 @@ function hasCompleteInterrupt(raw: string) {
 function isConfirmationReply(input: string) {
   const normalized = input.trim().toLowerCase();
   return normalized === "yes" || normalized === "no";
+}
+
+function getOrchestratorConfig() {
+  return {
+    ORCHESTRATOR_RUN_API_KEY: process.env.ORCHESTRATOR_RUN_API_KEY ?? "",
+    ORCHESTRATOR_PROJECT_ID: process.env.ORCHESTRATOR_PROJECT_ID ?? "",
+    ORCHESTRATOR_BASE_URL:
+      process.env.ORCHESTRATOR_BASE_URL ?? "https://agent-authoring-flatiron-school.vercel.app",
+    ORCHESTRATOR_RUN_PATH: process.env.ORCHESTRATOR_RUN_PATH ?? "",
+  };
 }

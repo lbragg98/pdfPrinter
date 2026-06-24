@@ -4,12 +4,9 @@ import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import type {
   OrchestratorResponse,
   QuizResponse,
-  SkillInterruptPayload
+  SkillInterruptPayload,
 } from "../lib/orchestrator";
-import {
-  createThreadId,
-  runOrchestratorPrompt
-} from "../lib/orchestrator";
+import { createThreadId, runOrchestratorPrompt } from "../lib/orchestrator";
 
 const PythonMark = () => (
   <img
@@ -32,7 +29,10 @@ const SendIcon = () => (
 );
 
 function MarkdownText({ content }: { content: string }) {
-  const blocks = content.trim().split(/\n\s*\n/).filter(Boolean);
+  const blocks = content
+    .trim()
+    .split(/\n\s*\n/)
+    .filter(Boolean);
 
   return (
     <>
@@ -46,7 +46,9 @@ function MarkdownText({ content }: { content: string }) {
           return (
             <Tag key={index} className="markdown-list">
               {lines.map((line, itemIndex) => (
-                <li key={itemIndex}>{renderInline(line.replace(/^([-*]|\d+\.)\s+/, ""))}</li>
+                <li key={itemIndex}>
+                  {renderInline(line.replace(/^([-*]|\d+\.)\s+/, ""))}
+                </li>
               ))}
             </Tag>
           );
@@ -75,9 +77,14 @@ function renderInline(text: string): ReactNode {
       const linkMatch = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
       if (linkMatch) {
         parts.push(
-          <a key={`${index}-link`} href={linkMatch[2]} target="_blank" rel="noreferrer">
+          <a
+            key={`${index}-link`}
+            href={linkMatch[2]}
+            target="_blank"
+            rel="noreferrer"
+          >
             {linkMatch[1]}
-          </a>
+          </a>,
         );
       }
     } else if (token.startsWith("**")) {
@@ -98,14 +105,14 @@ function renderInline(text: string): ReactNode {
   return parts.length ? <>{parts}</> : text;
 }
 
-type GenerationMode = "study-sheet" | "quiz";
+type GenerationMode = "study-sheet" | "quiz" | "import";
 
 function hasInterrupt(response: OrchestratorResponse) {
   return Boolean(
     response.interrupt ||
-      response.interruptRequested ||
-      response.waitingForInput ||
-      response.interruptNodeId
+    response.interruptRequested ||
+    response.waitingForInput ||
+    response.interruptNodeId,
   );
 }
 
@@ -119,7 +126,11 @@ function isQuizResponse(value: unknown): value is QuizResponse {
     Array.isArray(record.AnswerKey) &&
     Array.isArray(record.Questions) &&
     record.Questions.every((question) => {
-      if (!question || typeof question !== "object" || Array.isArray(question)) {
+      if (
+        !question ||
+        typeof question !== "object" ||
+        Array.isArray(question)
+      ) {
         return false;
       }
 
@@ -138,11 +149,19 @@ function buildPrompt(topic: string, mode: GenerationMode) {
     return `python Study sheet about ${topic}`;
   }
 
+  if (mode === "import") {
+    return `import a file for ${topic}`;
+  }
+
   return `make a quiz about ${topic}`;
 }
 
+function buildImportLookupPrompt() {
+  return "what is the most recently uploaded file to the MCP server?";
+}
+
 function getQuizResponse(response: OrchestratorResponse, mode: GenerationMode) {
-  if (mode === "study-sheet") {
+  if (mode === "study-sheet" || mode === "import") {
     return null;
   }
 
@@ -151,6 +170,67 @@ function getQuizResponse(response: OrchestratorResponse, mode: GenerationMode) {
   }
 
   return hasInterrupt(response) ? null : response.quizResponse;
+}
+
+function extractImportId(value: unknown): string {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return "";
+  }
+
+  const record = value as Record<string, unknown>;
+  const direct = extractFirstString([
+    record.id,
+    record.import_id,
+    record.importId,
+    record.upload_id,
+    record.uploadId,
+  ]);
+  if (direct) {
+    return direct;
+  }
+
+  return extractFirstString([
+    extractImportId(record.data),
+    extractImportId(record.result),
+    extractImportId(record.file),
+    extractImportId(record.payload),
+    extractImportId(record.body),
+  ]);
+}
+
+function extractProcessingStatus(value: unknown): string {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return "";
+  }
+
+  const record = value as Record<string, unknown>;
+  const direct = extractFirstString([
+    record.processing_status,
+    record.processingStatus,
+    record.status,
+    record.state,
+  ]);
+  if (direct) {
+    return direct;
+  }
+
+  return (
+    extractProcessingStatus(record.data) ||
+    extractProcessingStatus(record.result) ||
+    extractProcessingStatus(record.file) ||
+    extractProcessingStatus(record.payload) ||
+    extractProcessingStatus(record.body)
+  );
+}
+
+function extractFirstString(values: unknown[]) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return "";
 }
 
 function QuizPreview({ quiz }: { quiz: QuizResponse }) {
@@ -261,7 +341,9 @@ function QuizPreview({ quiz }: { quiz: QuizResponse }) {
             })}
           </div>
           {feedback ? (
-            <div className={`quiz-feedback quiz-feedback-${feedback.toLowerCase()}`}>
+            <div
+              className={`quiz-feedback quiz-feedback-${feedback.toLowerCase()}`}
+            >
               <p>{feedback}</p>
               {feedback === "Incorrect" ? (
                 <p>
@@ -286,21 +368,29 @@ function QuizPreview({ quiz }: { quiz: QuizResponse }) {
 export default function Page() {
   const [topic, setTopic] = useState("");
   const [mode, setMode] = useState<GenerationMode>("quiz");
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [output, setOutput] = useState(
-    "Enter a topic to generate the first study sheet draft."
+    "Enter a topic to generate the first study sheet draft.",
   );
   const [quizResponse, setQuizResponse] = useState<QuizResponse | null>(null);
   const [flowState, setFlowState] = useState<
-    "idle" | "generating" | "waiting" | "creatingPdf" | "complete"
+    | "idle"
+    | "generating"
+    | "waiting"
+    | "creatingPdf"
+    | "complete"
+    | "importing"
+    | "queryingImport"
   >("idle");
   const [downloadUrl, setDownloadUrl] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [needsConfirmation, setNeedsConfirmation] = useState(false);
-  const [pendingInterrupt, setPendingInterrupt] = useState<SkillInterruptPayload | null>(null);
+  const [pendingInterrupt, setPendingInterrupt] =
+    useState<SkillInterruptPayload | null>(null);
   const [pendingInterruptNodeId, setPendingInterruptNodeId] = useState("");
   const [showDownloadLink, setShowDownloadLink] = useState(false);
   const [confirmMessage, setConfirmMessage] = useState(
-    "A study sheet has been created. Do you want to make a printable PDF?"
+    "A study sheet has been created. Do you want to make a printable PDF?",
   );
 
   const [threadId] = useState(() => createThreadId("study-sheet"));
@@ -311,18 +401,184 @@ export default function Page() {
     void handleCreate();
   };
 
+  const handleImportLookup = async () => {
+    if (!uploadedFile) {
+      setOutput("Choose a file before asking the orchestrator.");
+      return;
+    }
+
+    setIsLoading(true);
+    setFlowState("queryingImport");
+    setOutput("Asking the orchestrator for the most recent file...");
+
+    console.log("[page] import orchestrator lookup start", {
+      traceId,
+      threadId,
+      prompt: buildImportLookupPrompt(),
+    });
+
+    try {
+      const lookupResponse = await runOrchestratorPrompt({
+        threadId,
+        input: buildImportLookupPrompt(),
+        traceId,
+      });
+
+      console.log("[page] import orchestrator lookup response", {
+        traceId,
+        threadId,
+        waitingForInput: lookupResponse.waitingForInput,
+        messagePreview: lookupResponse.message.slice(0, 200),
+        textPreview: lookupResponse.text.slice(0, 200),
+      });
+
+      const lookupOutput =
+        lookupResponse.message ||
+        lookupResponse.text ||
+        lookupResponse.studySheet ||
+        "The orchestrator returned no response.";
+
+      setFlowState("complete");
+      setOutput(lookupOutput);
+      console.log("[page] import complete", {
+        traceId,
+        threadId,
+        message: lookupOutput,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      console.log("[page] import orchestrator lookup failed", {
+        traceId,
+        threadId,
+        message,
+      });
+      setFlowState("complete");
+      setOutput(
+        `Import uploaded, but the orchestrator lookup failed: ${message}`,
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleCreate = async () => {
+    if (mode === "import") {
+      if (!uploadedFile) {
+        setOutput("Choose a file before starting the import.");
+        return;
+      }
+
+      console.log("[page] import start", {
+        traceId,
+        threadId,
+        fileName: uploadedFile.name,
+        fileSize: uploadedFile.size,
+        fileType: uploadedFile.type,
+      });
+
+      setIsLoading(true);
+      setFlowState("importing");
+      setShowDownloadLink(false);
+      setDownloadUrl("");
+      setNeedsConfirmation(false);
+      setPendingInterrupt(null);
+      setPendingInterruptNodeId("");
+      setQuizResponse(null);
+      setOutput(`Uploading ${uploadedFile.name} to the MCP import service...`);
+
+      try {
+        const formData = new FormData();
+        formData.append("file", uploadedFile, uploadedFile.name);
+
+        const response = await fetch("/api/imports", {
+          method: "POST",
+          body: formData,
+        });
+
+        console.log("[page] import response", {
+          traceId,
+          threadId,
+          ok: response.ok,
+          status: response.status,
+          statusText: response.statusText,
+        });
+
+        const responseText = await response.text();
+        let body: Record<string, unknown> = {};
+        if (responseText) {
+          try {
+            body = JSON.parse(responseText) as Record<string, unknown>;
+          } catch {
+            body = { message: responseText };
+          }
+        }
+
+        if (!response.ok) {
+          throw new Error(
+            typeof body.error === "string"
+              ? body.error
+              : typeof body.message === "string"
+                ? body.message
+                : `Import request failed with status ${response.status}.`,
+          );
+        }
+
+        const message =
+          typeof body.message === "string"
+            ? body.message
+            : `Imported ${uploadedFile.name}.`;
+        const importId = extractImportId(body);
+
+        console.log("[page] import queued", {
+          traceId,
+          threadId,
+          importId,
+          processingStatus: extractProcessingStatus(body) || "(missing)",
+        });
+
+        setFlowState("complete");
+        setOutput(
+          importId
+            ? `Uploaded ${uploadedFile.name} to the MCP server. Import id: ${importId}.`
+            : message,
+        );
+        console.log("[page] import complete", {
+          traceId,
+          threadId,
+          importId,
+          message,
+        });
+        return;
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Unknown error";
+        console.log("[page] import failed", {
+          traceId,
+          threadId,
+          message,
+        });
+        setFlowState("idle");
+        setOutput(`Import failed: ${message}`);
+      } finally {
+        setIsLoading(false);
+      }
+
+      return;
+    }
+
     const trimmed = topic.trim();
 
     if (!trimmed) {
-      setOutput("Enter a topic before asking the agent to create a study sheet.");
+      setOutput(
+        "Enter a topic before asking the agent to create a study sheet.",
+      );
       return;
     }
 
     console.log("[page] create start", {
       traceId,
       threadId,
-      topic: trimmed
+      topic: trimmed,
     });
 
     setIsLoading(true);
@@ -333,52 +589,58 @@ export default function Page() {
     setPendingInterrupt(null);
     setPendingInterruptNodeId("");
     setQuizResponse(null);
-    setOutput(mode === "quiz" ? "Creating the quiz..." : "Creating the study sheet...");
+    setOutput(
+      mode === "quiz" ? "Creating the quiz..." : "Creating the study sheet...",
+    );
 
     try {
       const response: OrchestratorResponse = await runOrchestratorPrompt({
         threadId,
         input: buildPrompt(trimmed, mode),
-        traceId
+        traceId,
       });
       console.log("[page] create response", {
         traceId,
         waitingForInput: response.waitingForInput,
         downloadUrl: response.downloadUrl || "(missing)",
         messagePreview: response.message.slice(0, 200),
-        studySheetPreview: response.studySheet.slice(0, 200)
+        studySheetPreview: response.studySheet.slice(0, 200),
       });
       if (response.waitingForInput) {
         console.log("[page] interrupt shown", {
           traceId,
           threadId,
-          promptPreview: response.message.slice(0, 200)
+          promptPreview: response.message.slice(0, 200),
         });
       }
       setOutput(
         mode === "quiz"
           ? response.downloadUrl
             ? "Your Downloadable PDF is below"
-            : response.studySheet || response.text || "The agent returned no study sheet text."
+            : response.studySheet ||
+              response.text ||
+              "The agent returned no study sheet text."
           : response.studySheet ||
               response.text ||
               response.message ||
-              "The agent returned no study sheet text."
+              "The agent returned no study sheet text.",
       );
       setConfirmMessage(
         response.waitingForInput
           ? "Skill export to pdf is waiting for human input at node Interrupt."
           : response.message ||
-            "A study sheet has been created. Do you want to make a printable PDF?"
+              "A study sheet has been created. Do you want to make a printable PDF?",
       );
       setNeedsConfirmation(response.waitingForInput);
       setPendingInterrupt(response.waitingForInput ? response.interrupt : null);
       setPendingInterruptNodeId(
         response.waitingForInput
           ? response.interruptNodeId || response.interrupt?.node || ""
-          : ""
+          : "",
       );
-      setQuizResponse(hasInterrupt(response) ? null : getQuizResponse(response, mode));
+      setQuizResponse(
+        hasInterrupt(response) ? null : getQuizResponse(response, mode),
+      );
       setFlowState(response.waitingForInput ? "waiting" : "idle");
 
       if (!response.waitingForInput && response.downloadUrl) {
@@ -396,7 +658,7 @@ export default function Page() {
 
   const applyConfirmationResponse = (
     response: OrchestratorResponse,
-    confirmation: "yes" | "no"
+    confirmation: "yes" | "no",
   ) => {
     const nextDownloadUrl = response.downloadUrl || "";
 
@@ -406,7 +668,7 @@ export default function Page() {
       waitingForInput: response.waitingForInput,
       downloadUrl: response.downloadUrl || "(missing)",
       messagePreview: response.message.slice(0, 200),
-      studySheetPreview: response.studySheet.slice(0, 200)
+      studySheetPreview: response.studySheet.slice(0, 200),
     });
 
     setDownloadUrl(nextDownloadUrl);
@@ -415,11 +677,13 @@ export default function Page() {
       setFlowState("waiting");
       setNeedsConfirmation(true);
       setPendingInterrupt(response.interrupt);
-      setPendingInterruptNodeId(response.interruptNodeId || response.interrupt?.node || "");
+      setPendingInterruptNodeId(
+        response.interruptNodeId || response.interrupt?.node || "",
+      );
       setQuizResponse(null);
       setConfirmMessage(
         response.message ||
-          "Skill export to pdf is waiting for human input at node Interrupt."
+          "Skill export to pdf is waiting for human input at node Interrupt.",
       );
       setOutput(response.message || "Creating the printable PDF...");
       return;
@@ -430,9 +694,9 @@ export default function Page() {
     setOutput(
       confirmation === "no"
         ? response.studySheet ||
-          response.text ||
-          response.message ||
-          "The PDF export is still processing. The workflow has not produced a download link yet."
+            response.text ||
+            response.message ||
+            "The PDF export is still processing. The workflow has not produced a download link yet."
         : mode === "quiz"
           ? response.downloadUrl
             ? "Your Downloadable PDF is below"
@@ -442,7 +706,7 @@ export default function Page() {
           : response.studySheet ||
             response.text ||
             response.message ||
-            "The PDF export is still processing. The workflow has not produced a download link yet."
+            "The PDF export is still processing. The workflow has not produced a download link yet.",
     );
   };
 
@@ -454,14 +718,14 @@ export default function Page() {
       setFlowState("idle");
       setNeedsConfirmation(false);
       setOutput(
-        "PDF generation failed: the paused workflow did not return an active interrupt node to resume."
+        "PDF generation failed: the paused workflow did not return an active interrupt node to resume.",
       );
       return;
     }
 
     console.log(`[page] confirm ${resumeData}`, {
       traceId,
-      threadId
+      threadId,
     });
 
     setIsLoading(true);
@@ -474,14 +738,14 @@ export default function Page() {
     setOutput(
       resumeData === "yes"
         ? "Creating the printable PDF..."
-        : "Sending no response to the orchestrator..."
+        : "Sending no response to the orchestrator...",
     );
 
     try {
       if (resumeData === "yes") {
         console.log("[page] confirmation accepted", {
           threadId,
-          interruptNode: interruptNodeId
+          interruptNode: interruptNodeId,
         });
       }
 
@@ -493,10 +757,10 @@ export default function Page() {
           interrupt: {
             ...interrupt,
             node: interruptNodeId,
-            interrupt_node_id: interruptNodeId
+            interrupt_node_id: interruptNodeId,
           },
-          resumeData
-        }
+          resumeData,
+        },
       });
 
       applyConfirmationResponse(response, resumeData);
@@ -531,7 +795,11 @@ export default function Page() {
 
           <h1>What topic do you want the agent to turn into a study sheet?</h1>
 
-          <div className="mode-switch" role="tablist" aria-label="Generation mode">
+          <div
+            className="mode-switch"
+            role="tablist"
+            aria-label="Generation mode"
+          >
             <button
               className={`mode-switch-option ${mode === "study-sheet" ? "is-active" : ""}`}
               type="button"
@@ -550,24 +818,61 @@ export default function Page() {
             >
               Quiz
             </button>
+            <button
+              className={`mode-switch-option ${mode === "import" ? "is-active" : ""}`}
+              type="button"
+              role="tab"
+              aria-selected={mode === "import"}
+              onClick={() => setMode("import")}
+            >
+              Import
+            </button>
           </div>
 
           <form className="prompt-shell" onSubmit={handleSubmit}>
             <div className="prompt-icon" aria-hidden="true">
               ◔
             </div>
-            <input
-              className="prompt-input"
-              value={topic}
-              onChange={(event) => setTopic(event.target.value)}
-              placeholder="Enter a topic like Python lists, loops, or functions..."
-              aria-label="Topic"
-            />
+            {mode === "import" ? (
+              <div className="import-shell">
+                <input
+                  className="prompt-file-input"
+                  type="file"
+                  aria-label="Upload file"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] ?? null;
+                    setUploadedFile(file);
+                    setQuizResponse(null);
+                    setDownloadUrl("");
+                    setShowDownloadLink(false);
+                    setNeedsConfirmation(false);
+                    setPendingInterrupt(null);
+                    setPendingInterruptNodeId("");
+                    setFlowState("idle");
+                    setOutput(
+                      file
+                        ? `Selected file: ${file.name}. Ready to import.`
+                        : "Choose a file to import.",
+                    );
+                  }}
+                />
+              </div>
+            ) : (
+              <input
+                className="prompt-input"
+                value={topic}
+                onChange={(event) => setTopic(event.target.value)}
+                placeholder="Enter a topic like Python lists, loops, or functions..."
+                aria-label="Topic"
+              />
+            )}
             <button
               className="prompt-submit"
               type="submit"
               disabled={isLoading}
-              aria-label="Send topic"
+              aria-label={
+                mode === "import" ? "Import file or URL" : "Send topic"
+              }
             >
               <SendIcon />
             </button>
@@ -575,24 +880,62 @@ export default function Page() {
 
           <section
             className="output-shell"
-            aria-label={mode === "quiz" ? "Quiz output" : "Study sheet output"}
+            aria-label={
+              mode === "quiz"
+                ? "Quiz output"
+                : mode === "import"
+                  ? "Import output"
+                  : "Study sheet output"
+            }
           >
             <div className="output-header">
-              <span className="output-label">{mode === "quiz" ? "Quiz" : "Output"}</span>
+              <span className="output-label">
+                {mode === "quiz"
+                  ? "Quiz"
+                  : mode === "import"
+                    ? "Import"
+                    : "Output"}
+              </span>
               <span className="output-status">
-                {flowState === "generating"
-                  ? "Generating study sheet..."
-                  : flowState === "waiting"
-                    ? "Waiting for confirmation..."
-                    : flowState === "creatingPdf"
-                      ? "Creating PDF..."
+                {mode === "import"
+                  ? flowState === "importing"
+                    ? "Uploading..."
+                    : flowState === "queryingImport"
+                      ? "Asking orchestrator..."
                       : flowState === "complete"
-                        ? "Complete"
-                      : "Ready"}
+                        ? "Queued"
+                        : "Ready"
+                  : flowState === "generating"
+                    ? "Generating study sheet..."
+                    : flowState === "waiting"
+                      ? "Waiting for confirmation..."
+                      : flowState === "creatingPdf"
+                        ? "Creating PDF..."
+                        : flowState === "complete"
+                          ? "Complete"
+                          : "Ready"}
               </span>
             </div>
             <div className="output-card">
-              {mode !== "quiz" ? (
+              {mode === "import" ? (
+                <div className="output-copy markdown-output">
+                  <p className="output-title">Import queue</p>
+                  <MarkdownText content={output} />
+                  {uploadedFile && flowState === "complete" ? (
+                    <div className="download-row">
+                      <span className="download-label">Next step</span>
+                      <button
+                        className="download-link"
+                        type="button"
+                        onClick={() => void handleImportLookup()}
+                        disabled={isLoading}
+                      >
+                        See upload
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : mode !== "quiz" ? (
                 <>
                   <p className="output-title">Study sheet preview</p>
                   <div className="output-copy markdown-output">
@@ -604,15 +947,24 @@ export default function Page() {
                 <div className="download-row">
                   <span className="download-label">Printable PDF link</span>
                   {downloadUrl ? (
-                    <a className="download-link" href={downloadUrl} target="_blank" rel="noreferrer">
+                    <a
+                      className="download-link"
+                      href={downloadUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
                       Download your PDF
                     </a>
                   ) : (
-                    <span className="download-link download-link-disabled">Download link pending</span>
+                    <span className="download-link download-link-disabled">
+                      Download link pending
+                    </span>
                   )}
                 </div>
               ) : null}
-              {mode === "quiz" && quizResponse ? <QuizPreview quiz={quizResponse} /> : null}
+              {mode === "quiz" && quizResponse ? (
+                <QuizPreview quiz={quizResponse} />
+              ) : null}
             </div>
           </section>
         </div>
