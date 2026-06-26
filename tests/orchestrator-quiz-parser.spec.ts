@@ -37,7 +37,7 @@ test("done event structuredResponse becomes quizResponse", () => {
   });
 });
 
-test("orchestrator route forwards the scope id header upstream", async () => {
+test("orchestrator route forwards the requested scope id header upstream", async () => {
   const originalFetch = global.fetch;
   const originalApiKey = process.env.ORCHESTRATOR_RUN_API_KEY;
   const originalProjectId = process.env.ORCHESTRATOR_PROJECT_ID;
@@ -81,6 +81,7 @@ test("orchestrator route forwards the scope id header upstream", async () => {
       body: JSON.stringify({
         threadId: "thread-1",
         input: "hello",
+        scopeId: "SampleApp/Category1/*",
       }),
     });
 
@@ -95,7 +96,7 @@ test("orchestrator route forwards the scope id header upstream", async () => {
     expect(headers).toMatchObject({
       authorization: "Bearer test-key",
       "content-type": "application/json",
-      "scope-id": "logan-test",
+      "scope-id": "SampleApp/Category1/*",
     });
   } finally {
     global.fetch = originalFetch;

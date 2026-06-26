@@ -1,4 +1,4 @@
-// File: C:\Users\lbrag\APPRENTICESHIP\PDF PRINTER\app\api\imports\route.ts
+// File: /Users/kylontyner/dev/pdfPrinter/app/api/imports/route.ts
 import * as entry from '../../../../../app/api/imports/route.js'
 import type { NextRequest } from 'next/server.js'
 

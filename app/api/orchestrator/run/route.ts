@@ -10,6 +10,7 @@ type OrchestratorRunBody = {
   threadId?: string;
   input?: string;
   traceId?: string;
+  scopeId?: string;
   resume_skill_interrupt?: ResumeSkillInterrupt;
 };
 
@@ -47,6 +48,7 @@ export async function POST(request: Request) {
   console.log("[orchestrator route] request", {
     traceId: body.traceId || body.threadId,
     threadId: body.threadId,
+    scopeId: typeof body.scopeId === "string" ? body.scopeId : ORCHESTRATOR_SCOPE_ID,
     stopOnInterrupt,
     isResumeRequest,
     inputPreview: input.slice(0, 240)
@@ -75,12 +77,17 @@ async function runSingleUpstreamRun(body: OrchestratorRunBody, stopOnInterrupt: 
     ORCHESTRATOR_RUN_PATH,
   } = getOrchestratorConfig();
 
+  const scopeId =
+    typeof body.scopeId === "string" && body.scopeId.trim()
+      ? body.scopeId.trim()
+      : ORCHESTRATOR_SCOPE_ID;
+
   const upstreamResponse = await fetch(new URL(ORCHESTRATOR_RUN_PATH, ORCHESTRATOR_BASE_URL), {
     method: "POST",
     headers: {
       Authorization: `Bearer ${ORCHESTRATOR_RUN_API_KEY}`,
       "Content-Type": "application/json",
-      "Scope-ID": ORCHESTRATOR_SCOPE_ID
+      "Scope-ID": scopeId
     },
     body: JSON.stringify({
       projectId: ORCHESTRATOR_PROJECT_ID,

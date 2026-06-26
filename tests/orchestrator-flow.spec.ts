@@ -227,21 +227,29 @@ test("import flow uploads a file through the mcp import endpoint", async ({
 }) => {
   let orchestratorCalls = 0;
   let postCalls = 0;
+  let eventCalls = 0;
 
   await page.route("**/api/orchestrator/run", async (route) => {
     orchestratorCalls += 1;
     const request = route.request();
-    const body = JSON.parse(request.postData() ?? "{}") as { input?: string };
+    const body = JSON.parse(request.postData() ?? "{}") as {
+      input?: string;
+      scopeId?: string;
+    };
 
-    expect(body.input).toBe(
-      'Using Scope-ID "logan-test", what is the most recently uploaded file to the MCP server?',
+    expect(body.scopeId).toBe("SampleApp/Category1/*");
+    expect(body.input).toContain("Selected retrieval scope: SampleApp/Category1/*");
+    expect(body.input).toContain("Selected scope label: Category1");
+    expect(body.input).toContain("Files expected in scope: notes.txt");
+    expect(body.input).toContain(
+      "User question: Summarize this file in one sentence.",
     );
 
     await route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
-        message: "Most recently uploaded file is notes.txt",
+        message: "This file is a short local note that says hello from local file upload.",
       }),
     });
   });
@@ -257,6 +265,7 @@ test("import flow uploads a file through the mcp import endpoint", async ({
         "multipart/form-data",
       );
       expect(body).toContain("notes.txt");
+      expect(body).toContain("SampleApp/Category1/notes.txt");
 
       await route.fulfill({
         status: 200,
@@ -272,27 +281,135 @@ test("import flow uploads a file through the mcp import endpoint", async ({
       return;
     }
 
+    if (
+      request.method() === "GET" &&
+      url.includes("/api/imports/upload-123/events")
+    ) {
+      eventCalls += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          events: [
+            { stage: "parsing", status: "complete" },
+            { stage: "embedding", status: "pending" },
+          ],
+        }),
+      });
+      return;
+    }
+
     throw new Error(`Unexpected import request: ${request.method()} ${url}`);
   });
 
   await page.goto("/");
 
   await page.getByRole("tab", { name: "Import" }).click();
-  await page.getByLabel("Upload file").setInputFiles({
+  await page.getByLabel("Upload category").fill("Category1");
+  await page.getByLabel("Upload files").setInputFiles({
     name: "notes.txt",
     mimeType: "text/plain",
     buffer: Buffer.from("hello from local file upload"),
   });
-  await page.getByRole("button", { name: "Import file or URL" }).click();
+  await page.getByRole("button", { name: "Upload selected files" }).click();
+
+  await expect(page.getByText('"stage": "embedding"')).toBeVisible();
+  await page
+    .getByLabel("Question about selected scope")
+    .fill("Summarize this file in one sentence.");
+  await page.getByRole("button", { name: "Ask using selected scope" }).click();
 
   await expect(
-    page.getByText("Uploaded notes.txt to the MCP server."),
+    page.getByText(
+      "This file is a short local note that says hello from local file upload.",
+    ),
   ).toBeVisible();
-  await page.getByRole("button", { name: "See upload" }).click();
-
-  await expect(
-    page.getByText("Most recently uploaded file is notes.txt"),
-  ).toBeVisible();
+  await expect(page.getByText("Scope:")).toBeVisible();
+  await expect(page.getByRole("button", { name: "notes.txt" })).toBeVisible();
   expect(postCalls).toBe(1);
+  expect(eventCalls).toBe(1);
+  expect(orchestratorCalls).toBe(1);
+});
+
+test("import tab loads stored file references and supports file-level scope", async ({
+  page,
+}) => {
+  let orchestratorCalls = 0;
+
+  await page.addInitScript(() => {
+    window.localStorage.setItem(
+      "pdf-printer-import-catalog",
+      JSON.stringify([
+        {
+          localId: "import-ref-1",
+          fileName: "notes.txt",
+          categoryPath: "Category1",
+          scopeId: "SampleApp/Category1/notes.txt",
+          importId: "upload-123",
+          uploadedAt: "2026-06-24T12:00:00.000Z",
+          processingStatus: "complete",
+          fileType: "text/plain",
+          fileSize: 29,
+        },
+        {
+          localId: "import-ref-2",
+          fileName: "outline.pdf",
+          categoryPath: "Category2",
+          scopeId: "SampleApp/Category2/outline.pdf",
+          importId: "upload-456",
+          uploadedAt: "2026-06-24T12:05:00.000Z",
+          processingStatus: "complete",
+          fileType: "application/pdf",
+          fileSize: 2048,
+        },
+      ]),
+    );
+  });
+
+  await page.route("**/api/orchestrator/run", async (route) => {
+    orchestratorCalls += 1;
+    const request = route.request();
+    const body = JSON.parse(request.postData() ?? "{}") as {
+      input?: string;
+      scopeId?: string;
+    };
+
+    expect(body.scopeId).toBe("SampleApp/Category2/outline.pdf");
+    expect(body.input).toContain(
+      "Selected retrieval scope: SampleApp/Category2/outline.pdf",
+    );
+    expect(body.input).toContain(
+      "Selected scope label: Category2 / outline.pdf",
+    );
+    expect(body.input).toContain("Files expected in scope: outline.pdf");
+    expect(body.input).toContain("User question: What is this file mainly about?");
+
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        message: "The outline file is mainly about a project plan.",
+      }),
+    });
+  });
+
+  await page.goto("/");
+  await page.getByRole("tab", { name: "Import" }).click();
+
+  await expect(
+    page.getByText("Ask a one-off question using the selected scope."),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "notes.txt" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "outline.pdf" })).toBeVisible();
+
+  await page.getByRole("button", { name: "outline.pdf" }).click();
+  await page
+    .getByLabel("Question about selected scope")
+    .fill("What is this file mainly about?");
+  await page.getByRole("button", { name: "Ask using selected scope" }).click();
+
+  await expect(
+    page.getByText("The outline file is mainly about a project plan."),
+  ).toBeVisible();
   expect(orchestratorCalls).toBe(1);
 });

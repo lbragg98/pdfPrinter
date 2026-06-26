@@ -21,10 +21,10 @@
       "static/chunks/main-app.js",
       "static/chunks/app/api/imports/route.js"
     ],
-    "/api/orchestrator/run/route": [
+    "/api/imports/[id]/events/route": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/api/orchestrator/run/route.js"
+      "static/chunks/app/api/imports/[id]/events/route.js"
     ]
   }
 }

@@ -62,6 +62,7 @@ type RunPromptArgs = {
   threadId: string;
   input: string;
   traceId?: string;
+  scopeId?: string;
   resumeSkillInterrupt?: ResumeSkillInterrupt;
 };
 
@@ -116,6 +117,7 @@ export async function runOrchestratorPrompt({
   threadId,
   input,
   traceId,
+  scopeId,
   resumeSkillInterrupt,
 }: RunPromptArgs): Promise<OrchestratorResponse> {
   console.log("[orchestrator client] request", {
@@ -133,6 +135,7 @@ export async function runOrchestratorPrompt({
       threadId,
       input,
       traceId,
+      ...(scopeId ? { scopeId } : {}),
       ...(resumeSkillInterrupt
         ? { resume_skill_interrupt: resumeSkillInterrupt }
         : {}),

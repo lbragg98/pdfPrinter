@@ -1,4 +1,4 @@
-// File: C:\Users\lbrag\APPRENTICESHIP\PDF PRINTER\app\page.tsx
+// File: /Users/kylontyner/dev/pdfPrinter/app/page.tsx
 import * as entry from '../../../app/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

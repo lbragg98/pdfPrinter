@@ -1,6 +1,5 @@
 const MCP_IMPORT_BASE_URL = process.env.MCP_IMPORT_BASE_URL ?? "";
 const MCP_IMPORT_API_TOKEN = process.env.MCP_IMPORT_API_TOKEN ?? "";
-const MCP_SCOPE_ID = "logan-test";
 const MCP_USER_ID = "12345";
 
 export async function POST(request: Request) {
@@ -21,6 +20,10 @@ export async function POST(request: Request) {
   const formData = await request.formData();
   const file = formData.get("file");
   const url = formData.get("url");
+  const scopeId =
+    typeof formData.get("scopeId") === "string"
+      ? String(formData.get("scopeId")).trim()
+      : "";
 
   console.log("[imports route] request received", {
     hasFile: file instanceof File,
@@ -33,6 +36,13 @@ export async function POST(request: Request) {
   if (!(file instanceof File) && typeof url !== "string") {
     return Response.json(
       { error: "Upload a file or provide a URL." },
+      { status: 400 },
+    );
+  }
+
+  if (!scopeId) {
+    return Response.json(
+      { error: "scopeId is required." },
       { status: 400 },
     );
   }
@@ -50,7 +60,7 @@ export async function POST(request: Request) {
       method: "POST",
       headers: {
         Authorization: `Bearer ${MCP_IMPORT_API_TOKEN}`,
-        "Scope-ID": MCP_SCOPE_ID,
+        "Scope-ID": scopeId,
         "User-ID": MCP_USER_ID,
       },
       body: upstreamBody,
@@ -81,6 +91,7 @@ export async function POST(request: Request) {
 
   return Response.json({
     ...(responseJson ?? {}),
+    scopeId,
     message:
       responseMessage ||
       (file instanceof File

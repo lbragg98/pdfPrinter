@@ -1,11 +1,11 @@
 const MCP_IMPORT_BASE_URL = process.env.MCP_IMPORT_BASE_URL ?? "";
 const MCP_IMPORT_API_TOKEN = process.env.MCP_IMPORT_API_TOKEN ?? "";
-const MCP_SCOPE_ID = "logan-test";
+const MCP_SCOPE_ID = "SampleApp/*";
 const MCP_USER_ID = "12345";
 
 export async function GET(
-  _request: Request,
-  { params }: { params: { id: string } },
+  request: Request,
+  context: { params: Promise<{ id: string }> },
 ) {
   if (!MCP_IMPORT_BASE_URL) {
     return Response.json(
@@ -21,11 +21,14 @@ export async function GET(
     );
   }
 
-  const { id } = params;
+  const { id } = await context.params;
 
   if (!id) {
     return Response.json({ error: "Import id is required." }, { status: 400 });
   }
+
+  const scopeId =
+    new URL(request.url).searchParams.get("scopeId")?.trim() || MCP_SCOPE_ID;
 
   const upstreamResponse = await fetch(
     new URL(`/api/imports/${id}`, MCP_IMPORT_BASE_URL),
@@ -33,7 +36,7 @@ export async function GET(
       method: "GET",
       headers: {
         Authorization: `Bearer ${MCP_IMPORT_API_TOKEN}`,
-        "Scope-ID": MCP_SCOPE_ID,
+        "Scope-ID": scopeId,
         "User-ID": MCP_USER_ID,
       },
       cache: "no-store",
