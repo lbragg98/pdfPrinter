@@ -1,5 +1,0 @@
-{
-  "/api/imports/route": "app/api/imports/route.js",
-  "/api/imports/[id]/events/route": "app/api/imports/[id]/events/route.js",
-  "/page": "app/page.js"
-}
